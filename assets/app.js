@@ -1180,6 +1180,15 @@
         '<button class="btn btn--danger" onclick="App.resetBlankConfirm()">🗑️ 清空为空白账本</button>' +
         '<button class="btn" onclick="App.resetDemoConfirm()">↺ 恢复示例数据</button>' +
         '</div>') +
+      card('GitHub Pages 数据同步',
+        '<p class="muted">将本机数据以 base64 写入 GitHub 仓库文件，供网页版读取或下次构建后作为默认数据。需具有 repo 权限的 Personal Access Token。</p>' +
+        '<div class="field"><label>GitHub Token</label><input id="ghToken" type="password" placeholder="ghp_..."/></div>' +
+        '<div class="grid grid--2">' +
+        '<div class="field"><label>仓库（owner/repo）</label><input id="ghRepo" value="' + esc(s.ghRepo || '') + '" placeholder="如 bailihongxi/sale-erp"/></div>' +
+        '<div class="field"><label>分支</label><input id="ghBranch" value="' + esc(s.ghBranch || 'main') + '"/></div>' +
+        '</div>' +
+        '<div class="field"><label>文件路径</label><input id="ghPath" value="' + esc(s.ghPath || 'data/state.json') + '"/></div>' +
+        '<button class="btn btn--primary mt12" onclick="App.syncToGitHub()">🚀 导出并更新到 GitHub</button>') +
       '</div>';
   };
   window.App.saveSettings = function () {
@@ -1187,6 +1196,44 @@
     document.getElementById('brandName').textContent = DB.settings().shopName;
     document.getElementById('shopName').textContent = DB.settings().shopName;
     toast('设置已保存', 'ok');
+  };
+  /** base64 编码（支持中文） */
+  function b64u(s) { return btoa(unescape(encodeURIComponent(s))); }
+  window.App.syncToGitHub = function () {
+    var token = $('#ghToken').value.trim();
+    var repo = $('#ghRepo').value.trim();
+    var branch = ($('#ghBranch').value || 'main').trim();
+    var path = ($('#ghPath').value || 'data/state.json').trim();
+    if (!token) { toast('请输入 GitHub Token', 'err'); return; }
+    if (!repo || repo.split('/').length !== 2) { toast('仓库格式应为 owner/repo', 'err'); return; }
+    if (!path) { toast('请输入文件路径', 'err'); return; }
+    DB.saveSettings({ ghRepo: repo, ghBranch: branch, ghPath: path });
+    var api = 'https://api.github.com/repos/' + repo + '/contents/' + encodeURIComponent(path);
+    var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
+    var content = b64u(DB.exportData());
+    fetch(api + '?ref=' + encodeURIComponent(branch), { method: 'GET', headers: headers })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { return doPush(data && data.sha); })
+      .catch(function () { return doPush(null); });
+    function doPush(sha) {
+      var body = { message: 'Sync ERP data @ ' + new Date().toISOString(), content: content, branch: branch };
+      if (sha) body.sha = sha;
+      fetch(api, {
+        method: 'PUT',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+        body: JSON.stringify(body)
+      })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
+      .then(function (res) {
+        if (res.ok) {
+          var url = res.json.content && res.json.content.html_url;
+          toast('已同步到 GitHub' + (url ? '：' + url : ''), 'ok');
+        } else {
+          toast('同步失败：' + ((res.json && res.json.message) || res.status), 'err');
+        }
+      })
+      .catch(function (e) { toast('同步失败：' + (e && e.message || e), 'err'); });
+    }
   };
   window.App.resetData = function () { window.App.resetBlankConfirm(); };
   window.App.resetBlankConfirm = function () {

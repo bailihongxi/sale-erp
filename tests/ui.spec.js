@@ -16,7 +16,7 @@ var MODULES = ['dashboard', 'products', 'pos', 'sales', 'purchase', 'customers',
   'inventory', 'reports', 'finance', 'settings', 'data'];
 var NAV_COUNT = MODULES.length;
 
-function run() {
+async function run() {
 
   /* ========================================================
      D 基线
@@ -660,6 +660,45 @@ function run() {
   i3.App.savePurchase();
   check('搜索并选择商品后可正常保存进货单', i3.DB.all('purchases').length === beforeN + 1);
   check('进货单流程无 JS 错误', i3.errors.length === 0, i3.errors.join(' | '));
+
+  section('I4 设置页 GitHub Pages 数据同步');
+  var i4 = boot({ hash: '#settings' });
+  check('设置页有 GitHub 同步入口', /同步到 GitHub|GitHub Pages|更新到 GitHub/.test(i4.$('#view').textContent));
+  var fetchCalls = [];
+  i4.window.fetch = function (url, opts) {
+    fetchCalls.push({ url: url, method: (opts && opts.method) || 'GET', headers: (opts && opts.headers) || {}, body: (opts && opts.body) || null });
+    return Promise.resolve({
+      ok: fetchCalls.length === 1 ? false : true,
+      status: fetchCalls.length === 1 ? 404 : 200,
+      json: function () { return Promise.resolve(fetchCalls.length === 1 ? { message: 'Not Found' } : { content: { html_url: 'https://github.com/x/blob/data/state.json' } }); }
+    });
+  };
+  i4.$('#ghRepo').value = 'bailihongxi/sale-erp';
+  i4.$('#ghPath').value = 'data/state.json';
+  i4.$('#ghBranch').value = 'main';
+  i4.$('#ghToken').value = 'fake-token';
+  i4.App.syncToGitHub();
+  check('同步发起 GET 请求获取文件 SHA', fetchCalls.length >= 1 && fetchCalls[0].method === 'GET',
+    fetchCalls.length + ' calls');
+  await new Promise(function (r) { setTimeout(r, 30); });
+  check('文件不存在后发起 PUT 创建/更新文件', fetchCalls.length >= 2 && fetchCalls[1].method === 'PUT',
+    fetchCalls.length + ' calls');
+  var putBody = fetchCalls[1] && JSON.parse(fetchCalls[1].body);
+  check('PUT 请求体含 base64 数据内容', !!putBody && typeof putBody.content === 'string' && putBody.content.length > 100);
+  check('PUT 请求体含分支信息', !!putBody && putBody.branch === 'main');
+  check('PUT 请求头含 Authorization token',
+    !!fetchCalls[1] && /token fake-token/.test(fetchCalls[1].headers.Authorization || fetchCalls[1].headers.authorization || ''));
+  check('GET URL 含仓库、文件路径与分支',
+    /api\.github\.com\/repos\/bailihongxi\/sale-erp\/contents\/data%2Fstate\.json/.test(fetchCalls[0].url) &&
+    /ref=main/.test(fetchCalls[0].url));
+  var i4b = boot({ hash: '#settings' });
+  var i4bCalls = [];
+  i4b.window.fetch = function (url, opts) { i4bCalls.push({ url: url }); return Promise.resolve({ ok: true, json: function () { return Promise.resolve({}); } }); };
+  i4b.$('#ghToken').value = '';
+  i4b.App.syncToGitHub();
+  check('未填 token 时不调用 fetch', i4bCalls.length === 0);
+  check('GitHub 同步全程无 JS 错误', i4.errors.length + i4b.errors.length === 0,
+    [i4.errors, i4b.errors].map(function (x) { return x.join('|'); }).join(' / '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */
