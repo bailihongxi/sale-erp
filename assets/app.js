@@ -255,8 +255,8 @@
         '</tr>';
     }).join('') || '<tr><td colspan="10" class="empty">没有匹配的商品</td></tr>';
 
-    var chips = ['全部'].concat(cats).map(function (c) {
-      return '<button class="chip ' + (filter.cat === c ? 'active' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>';
+    var catOptions = ['全部'].concat(cats).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (filter.cat === c ? ' selected' : '') + '>' + esc(c) + '</option>';
     }).join('');
 
     var hasProd = list.length > 0;
@@ -273,15 +273,18 @@
       '<div class="spacer"></div>' +
       '<button class="btn" onclick="App.openBatchImport()">📥 批量导入</button>' +
       '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button></div>' +
-      (hasProd ? '<div class="row wrap" style="margin-bottom:12px">' +
+      (hasProd ? '<div class="row wrap" style="margin-bottom:12px;align-items:center">' +
         '<div class="search"><span>🔍</span><input id="prodKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(filter.kw) + '"/></div>' +
-        '</div><div class="cats">' + chips + '</div>' : '') +
+        '<select id="prodCat" class="chip" style="padding:6px 10px;border-radius:6px;border:1px solid var(--c-border);background:#fff">' + catOptions + '</select>' +
+        '<button class="btn btn--sm" id="prodCatFilter">筛选</button>' +
+        '</div>' : '') +
       bodyBlock;
 
     if (hasProd) {
       $('#prodKw').addEventListener('input', function (e) { filter.kw = e.target.value; renderProdRows(); });
-      app.querySelectorAll('.chip').forEach(function (c) {
-        c.addEventListener('click', function () { filter.cat = c.getAttribute('data-cat'); renderProdRows(); });
+      $('#prodCatFilter').addEventListener('click', function () {
+        filter.cat = $('#prodCat').value;
+        renderProdRows();
       });
     }
     renderProdRows();

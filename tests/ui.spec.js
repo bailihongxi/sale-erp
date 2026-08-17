@@ -763,6 +763,30 @@ async function run() {
   check('搜索过滤同时更新卡片', i5.$$('#prodCards .product-card').length < prodCount,
     i5.$$('#prodCards .product-card').length + ' vs ' + prodCount);
   check('商品卡片布局全程无 JS 错误', i5.errors.length === 0, i5.errors.join(' | '));
+
+  section('I6 商品管理分类下拉筛选');
+  var i6 = boot({ hash: '#products' });
+  check('商品页有分类下拉菜单 #prodCat', !!i6.$('#prodCat'));
+  check('商品页有筛选按钮 #prodCatFilter', !!i6.$('#prodCatFilter'));
+  check('不再使用 chip 分类按钮（.cats 容器不存在）', !i6.$('.cats'));
+  var catSelect = i6.$('#prodCat');
+  var allCats = Array.from(new Set(i6.DB.all('products').map(function (p) { return p.category; }).filter(Boolean)));
+  check('下拉选项数 = 分类数 + 1（全部）', catSelect.options.length === allCats.length + 1,
+    'options=' + catSelect.options.length + ' cats=' + allCats.length);
+  check('下拉首项为「全部」', catSelect.options[0].value === '全部' && catSelect.options[0].text === '全部');
+  // 选择某个分类后点筛选，验证过滤生效
+  var targetCat = allCats[0];
+  var expectedCount = i6.DB.all('products').filter(function (p) { return p.category === targetCat; }).length;
+  catSelect.value = targetCat; i6.fire(catSelect, 'change');
+  i6.click(i6.$('#prodCatFilter'));
+  check('筛选后表格行数 = 该分类商品数', i6.$$('#prodBody tr').length === expectedCount,
+    'rows=' + i6.$$('#prodBody tr').length + ' expected=' + expectedCount);
+  check('筛选后卡片数 = 该分类商品数', i6.$$('#prodCards .product-card').length === expectedCount);
+  // 切回全部
+  catSelect.value = '全部'; i6.fire(catSelect, 'change');
+  i6.click(i6.$('#prodCatFilter'));
+  check('切回全部后恢复所有商品', i6.$$('#prodBody tr').length === i6.DB.all('products').length);
+  check('分类筛选全程无 JS 错误', i6.errors.length === 0, i6.errors.join(' | '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */
