@@ -593,6 +593,41 @@ function run() {
   check('origin 徽标带 hide-mobile', /class="origin-badge hide-mobile"/.test(idxHtml));
   check('店铺名带 hide-mobile', /class="shop hide-mobile"/.test(idxHtml));
   check('style.css 定义 .hide-mobile 隐藏', /\.hide-mobile\s*\{\s*display:\s*none!important/.test(css));
+
+  /* ========================================================
+     I 用户新需求（5 项，逐个实现并提交）
+     ======================================================== */
+  section('I1 商品管理页批量导入');
+  var i1 = boot({ hash: '#products' });
+  check('商品页有「批量导入」按钮', /批量导入/.test(i1.$('#view').textContent));
+  i1.App.openBatchImport();
+  check('点击后打开导入弹窗并含文本域', !!i1.$('#batchArea'));
+  var csv = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存\n' +
+    '测试导入A,品牌A,型号A,类型A,分类A,台,100,150,5,20\n' +
+    '测试导入B,品牌B,型号B,类型B,分类B,台,200,250,5,30';
+  i1.$('#batchArea').value = csv;
+  i1.App.doBatchImport();
+  check('CSV 导入新增 2 个商品', i1.DB.all('products').filter(function (p) { return p.name.indexOf('测试导入') >= 0; }).length === 2,
+    i1.DB.all('products').filter(function (p) { return p.name.indexOf('测试导入') >= 0; }).length);
+  check('导入后仍停留在商品页', /商品管理/.test(i1.text('#viewTitle')));
+  var i1a = i1.DB.all('products').filter(function (p) { return p.name === '测试导入A'; })[0];
+  check('导入字段正确（批发价）', !!i1a && i1a.priceWholesale === 100, i1a && i1a.priceWholesale);
+  check('导入字段正确（库存）', !!i1a && i1a.stock === 20, i1a && i1a.stock);
+  var i1b = boot({ hash: '#products' });
+  i1b.App.openBatchImport();
+  i1b.$('#batchArea').value = '商品名称,批发价\n,100\n测试导入C,100';
+  i1b.App.doBatchImport();
+  check('无名称行被跳过，有效行仍导入', i1b.DB.all('products').filter(function (p) { return p.name === '测试导入C'; }).length === 1);
+  var i1c = boot({ hash: '#products' });
+  i1c.App.openBatchImport();
+  i1c.$('#batchArea').value = JSON.stringify([
+    { name: 'JSON导入A', brand: 'J', priceWholesale: 300, priceRetail: 400, stock: 10 },
+    { name: 'JSON导入B', brand: 'J', priceWholesale: 500, priceRetail: 600, stock: 20 }
+  ]);
+  i1c.App.doBatchImport();
+  check('JSON 数组导入成功', i1c.DB.all('products').filter(function (p) { return p.name.indexOf('JSON导入') >= 0; }).length === 2);
+  check('批量导入全程无 JS 错误', i1.errors.length + i1b.errors.length + i1c.errors.length === 0,
+    [i1.errors, i1b.errors, i1c.errors].map(function (x) { return x.join('|'); }).join(' / '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */

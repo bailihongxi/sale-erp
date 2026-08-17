@@ -270,6 +270,7 @@
     app.innerHTML =
       '<div class="view-head"><h2>商品管理</h2><span class="sub">共 ' + list.length + ' 个商品</span>' +
       '<div class="spacer"></div>' +
+      '<button class="btn" onclick="App.openBatchImport()">📥 批量导入</button>' +
       '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button></div>' +
       (hasProd ? '<div class="row wrap" style="margin-bottom:12px">' +
         '<div class="search"><span>🔍</span><input id="prodKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(filter.kw) + '"/></div>' +
@@ -336,6 +337,94 @@
   window.App.delProduct = function (id) {
     if (!confirm('确定删除该商品？')) return;
     DB.remove('products', id); toast('已删除', 'ok'); route();
+  };
+  /** 批量导入商品（CSV / TSV / JSON） */
+  window.App.openBatchImport = function () {
+    var sample = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存\n美的空调 KFR-35GW,美的,KFR-35GW,空调,空调,台,1899,2299,10,20\n九阳豆浆机 JYDZ,九阳,JYDZ,小家电,厨电,台,199,299,5,30';
+    var body =
+      '<div class="field"><label>粘贴 CSV / TSV / JSON</label><textarea id="batchArea" rows="10" placeholder="' + esc(sample) + '"></textarea></div>' +
+      '<div class="muted" style="font-size:12px;margin-top:6px">支持 CSV（逗号分隔，可含表头）、TSV（制表符分隔）或 JSON 数组。表头可用「商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存」或对应英文 key；无表头时按此顺序解析。</div>';
+    openModal('批量导入商品', body,
+      '<button class="btn" onclick="App.closeModal()">取消</button>' +
+      '<button class="btn btn--primary" onclick="App.doBatchImport()">开始导入</button>');
+  };
+  window.App.doBatchImport = function () {
+    var raw = ($('#batchArea') && $('#batchArea').value) || '';
+    if (!raw.trim()) { toast('没有输入内容', 'err'); return; }
+    var rows = [];
+    var errors = [];
+    // 先尝试 JSON 数组
+    try {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) rows = parsed;
+      else if (parsed && Array.isArray(parsed.products)) rows = parsed.products;
+      else errors.push('JSON 不是数组');
+    } catch (e) {
+      // CSV / TSV
+      var delim = raw.indexOf('\t') >= 0 ? '\t' : ',';
+      var lines = raw.split(/\r?\n/).filter(function (l) { return l.trim(); });
+      if (lines.length === 0) { errors.push('没有有效行'); }
+      else {
+        var keys = ['name','brand','model','type','category','unit','priceWholesale','priceRetail','lowStock','stock'];
+        var aliases = {
+          name: ['商品名称','name','名称'],
+          brand: ['品牌','brand'],
+          model: ['型号','model'],
+          type: ['类型','type'],
+          category: ['分类','category'],
+          unit: ['单位','unit'],
+          priceWholesale: ['批发价','priceWholesale','进货价','成本价'],
+          priceRetail: ['零售价','priceRetail','售价','price','sellPrice'],
+          lowStock: ['低库存阈值','lowStock','预警库存'],
+          stock: ['库存','stock']
+        };
+        var first = lines[0];
+        var parts = first.split(delim).map(function (h) { return h.trim(); });
+        var hasHeader = parts.some(function (h) { return aliases.name.indexOf(h) >= 0 || aliases.priceWholesale.indexOf(h) >= 0; });
+        var headers = hasHeader ? parts : null;
+        var start = hasHeader ? 1 : 0;
+        for (var i = start; i < lines.length; i++) {
+          var cells = lines[i].split(delim).map(function (c) { return c.trim(); });
+          var row = {};
+          if (headers) {
+            for (var hi = 0; hi < headers.length; hi++) {
+              var h = headers[hi];
+              for (var k in aliases) {
+                if (aliases[k].indexOf(h) >= 0) row[k] = cells[hi];
+              }
+            }
+          } else {
+            for (var ki = 0; ki < keys.length; ki++) row[keys[ki]] = cells[ki];
+          }
+          rows.push(row);
+        }
+      }
+    }
+    var created = 0, skipped = 0;
+    for (var ri = 0; ri < rows.length; ri++) {
+      var row = rows[ri];
+      if (!row.name || !String(row.name).trim()) {
+        errors.push('第 ' + (ri + 1) + ' 行缺少商品名称'); skipped++; continue;
+      }
+      DB.insert('products', {
+        name: String(row.name).trim(),
+        brand: String(row.brand || '').trim(),
+        model: String(row.model || '').trim(),
+        type: String(row.type || '').trim(),
+        category: String(row.category || '').trim(),
+        unit: String(row.unit || '').trim() || '台',
+        priceWholesale: parseFloat(row.priceWholesale) || 0,
+        priceRetail: parseFloat(row.priceRetail) || 0,
+        lowStock: parseInt(row.lowStock, 10) || 10,
+        stock: parseInt(row.stock, 10) || 0
+      });
+      created++;
+    }
+    closeModal();
+    var msg = '已导入 ' + created + ' 个商品' + (skipped ? '，跳过 ' + skipped + ' 行' : '');
+    if (errors.length) msg += '（' + errors[0] + (errors.length > 1 ? ' 等' : '') + '）';
+    toast(msg, created > 0 ? 'ok' : 'err');
+    route();
   };
 
   /* ---------- 销售开单（POS） ---------- */
