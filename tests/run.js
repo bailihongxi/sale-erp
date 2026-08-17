@@ -44,7 +44,13 @@ if (!filter || filter === 'ui') specs.push('./ui.spec.js');
     var mod = require(specs[i]);
     var run = mod && (mod.run || mod);
     if (typeof run === 'function') {
-      await run();
+      // 单个 spec 崩溃只登记为失败并继续，避免掩盖其他 spec 的结果
+      try {
+        await run();
+      } catch (e) {
+        global.check('【' + specs[i] + ' 运行崩溃，后续断言未执行】', false,
+          (e && e.message) + '\n' + (e && e.stack || ''));
+      }
     }
   }
 

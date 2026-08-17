@@ -181,6 +181,25 @@ a{color:inherit;text-decoration:none}
 .toast--ok{background:var(--c-success)}
 .toast--err{background:var(--c-danger)}
 
+/* 持久化失败常驻横幅（BUG-05）——必须常驻，不能像 toast 一闪而过 */
+.persist-banner{display:none;position:fixed;left:0;right:0;bottom:0;z-index:300;
+  align-items:center;gap:10px;padding:10px 16px;
+  background:var(--c-danger);color:#fff;font-size:13px;line-height:1.5;box-shadow:0 -2px 12px rgba(0,0,0,.18)}
+.persist-banner.show{display:flex}
+.persist-banner__ico{font-size:16px;flex:none}
+.persist-banner__msg{flex:1;min-width:0}
+.persist-banner .btn{flex:none;background:#fff;border-color:#fff;color:var(--c-danger)}
+.persist-banner .btn--ghost{background:transparent;border-color:rgba(255,255,255,.6);color:#fff}
+@media (max-width:768px){
+  .persist-banner{bottom:var(--h-bottom-nav,58px);flex-wrap:wrap}
+  .persist-banner__msg{flex:1 1 100%}
+}
+
+/* 购物车超库存提示 */
+.cart-warn{display:inline-block;margin-left:6px;padding:0 6px;border-radius:4px;
+  background:var(--c-danger-50);color:var(--c-danger);font-size:11px;font-weight:600}
+.cart-item.over .qty input{border-color:var(--c-danger);color:var(--c-danger)}
+
 /* 列表/空态 */
 .empty{text-align:center;color:var(--c-muted);padding:40px 0;font-size:13px}
 .muted{color:var(--c-muted)}

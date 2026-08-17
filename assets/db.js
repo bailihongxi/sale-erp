@@ -8,7 +8,17 @@
   'use strict';
 
   var KEY = 'sale_erp_v1_state';
+  var SCHEMA = 1;
   var STORE = (typeof localStorage !== 'undefined') ? localStorage : (root.__ls || (root.__ls = makeShim()));
+
+  /* 业务集合清单：导入补齐、载入自愈都以此为准 */
+  var COLLECTIONS = ['products', 'customers', 'suppliers', 'sales', 'purchases', 'stockLogs', 'finance'];
+  /* 虚拟往来主体：无客户的销售单归「散客」，无供应商的进货单归「其他供应商」 */
+  var WALKIN_ID = '__walkin__';
+  var NOSUP_ID = '__nosupplier__';
+  var DEFAULT_SETTINGS = { shopName: '家电批发中心', lowStock: 10, currency: '¥' };
+  /* localStorage 通用上限约 5MB（各浏览器略有差异，仅用于占用比例展示） */
+  var STORE_LIMIT = 5 * 1024 * 1024;
 
   function makeShim() {
     var m = {};
@@ -31,11 +41,71 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
 
+  /* ---------------- 金额精度（S1-04） ----------------
+     全部金额落库前一律 round2，避免浮点残留导致单据永远无法结清。 */
+  function round2(n) {
+    n = Number(n);
+    if (!isFinite(n)) return 0;
+    return Math.round(n * 100) / 100;
+  }
+  /** 是否已结清：容差 0.5 分 */
+  function isPaidOff(o) { return Number(o.paid || 0) >= Number(o.total || 0) - 0.005; }
+  function assign(target) {
+    for (var i = 1; i < arguments.length; i++) {
+      var src = arguments[i]; if (!src) continue;
+      for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k)) target[k] = src[k];
+    }
+    return target;
+  }
+
   function load() {
     try { state = JSON.parse(STORE.getItem(KEY)); } catch (e) { state = null; }
     if (!state || !state.products) state = null;
   }
-  function persist() { STORE.setItem(KEY, JSON.stringify(state)); }
+
+  /* ---------------- 持久化（S1-06 BUG-05） ----------------
+     写入失败（配额耗尽 / 隐私模式）不再静默丢数据：
+     - 不向业务层抛异常（避免开单流程中断）
+     - 通过 onPersistError 回调让 UI 常驻提示用户导出备份 */
+  var onPersistError = null;
+  var lastPersistOk = true;
+
+  function persist() {
+    try {
+      STORE.setItem(KEY, JSON.stringify(state));
+      lastPersistOk = true;
+      return true;
+    } catch (e) {
+      lastPersistOk = false;
+      var quota = /quota|exceed/i.test((e && e.name || '') + (e && e.message || ''));
+      var msg = quota
+        ? '本地存储已满，数据未保存！请立即到「数据管理」导出备份，再清理历史流水。'
+        : '数据保存失败，本次改动未保存：' + (e && e.message || e) + '（可能处于隐私模式）。请尽快导出备份。';
+      if (typeof onPersistError === 'function') {
+        try { onPersistError(msg, e); } catch (ignore) { /* UI 回调异常不应影响业务 */ }
+      }
+      return false;
+    }
+  }
+
+  /** 探测本地存储是否可正常写入（立即重试一次持久化） */
+  function persistOk() { return persist(); }
+
+  /** 当前占用与估算上限，供数据管理页展示进度条 */
+  function storageInfo() {
+    ensure();
+    var used = 0;
+    try { used = JSON.stringify(state).length; } catch (e) { used = 0; }
+    var stored = 0;
+    try { stored = (STORE.getItem(KEY) || '').length; } catch (e) { stored = 0; }
+    return {
+      used: used,
+      stored: stored,
+      limit: STORE_LIMIT,
+      percent: round2(used / STORE_LIMIT * 100),
+      ok: lastPersistOk
+    };
+  }
 
   /* ---------------- 种子数据 ---------------- */
   function seed() {
@@ -124,6 +194,16 @@
 
   function ensure() {
     if (!state) { load(); if (!state) seed(); }
+    normalize();
+  }
+
+  /** 自愈：老版本备份或残缺数据缺失集合时补空数组，避免 push 崩溃（BUG-04 连带） */
+  function normalize() {
+    if (!state) return;
+    for (var i = 0; i < COLLECTIONS.length; i++) {
+      if (!Array.isArray(state[COLLECTIONS[i]])) state[COLLECTIONS[i]] = [];
+    }
+    state.settings = assign({}, DEFAULT_SETTINGS, state.settings || {});
   }
 
   /* ---------------- 通用 CRUD ---------------- */
@@ -141,28 +221,74 @@
 
   /* ---------------- 业务操作 ---------------- */
   function orderStatus(o) {
-    if (o.paid >= o.total) return 'paid';
-    if (o.paid <= 0) return 'unpaid';
+    if (isPaidOff(o)) return 'paid';
+    if (Number(o.paid || 0) <= 0.005) return 'unpaid';
     return 'partial';
   }
 
+  /** 校验单据行，返回标准化后的行；不合法直接抛错（零写入） */
+  function normalizeLines(rawItems) {
+    var lines = (rawItems || []).filter(function (it) { return it && it.productId && Number(it.qty) > 0; });
+    if (!lines.length) {
+      var e0 = new Error('单据没有有效商品行');
+      e0.code = 'EMPTY_ITEMS';
+      throw e0;
+    }
+    return lines.map(function (it) {
+      return { productId: it.productId, qty: Number(it.qty), price: round2(it.price) };
+    });
+  }
+
+  /**
+   * 销售开单 —— 事务式（S1-02 BUG-02）
+   * 先按商品合并需求量做全量库存校验，任一行不足则整单拒绝、零写入；
+   * 校验通过后才写单据 / 扣库存 / 记流水。
+   */
   function recordSale(p) {
     ensure();
-    var items = p.items.map(function (it) {
+    var lines = normalizeLines(p.items);
+
+    // 1) 预校验：同一商品拆成多行也要合并后判断
+    var need = {};
+    lines.forEach(function (it) { need[it.productId] = (need[it.productId] || 0) + it.qty; });
+    var short = [];
+    Object.keys(need).forEach(function (pid) {
+      var prod = get('products', pid);
+      if (!prod) { short.push({ productId: pid, name: '(商品不存在或已删除)', want: need[pid], have: 0 }); return; }
+      if (Number(prod.stock || 0) < need[pid]) {
+        short.push({ productId: pid, name: prod.name, want: need[pid], have: Number(prod.stock || 0) });
+      }
+    });
+    if (short.length) {
+      var err = new Error('库存不足：' + short.map(function (s) {
+        return s.name + '（需 ' + s.want + '，存 ' + s.have + '）';
+      }).join('、'));
+      err.code = 'OUT_OF_STOCK';
+      err.detail = short;
+      throw err;                                  // 整单拒绝，不做任何写入
+    }
+
+    // 2) 落库
+    var items = lines.map(function (it) {
       var prod = get('products', it.productId);
-      return { productId: prod.id, name: prod.name, unit: prod.unit, qty: it.qty, price: it.price, subtotal: it.qty * it.price };
+      return { productId: prod.id, name: prod.name, unit: prod.unit, qty: it.qty, price: it.price, subtotal: round2(it.qty * it.price) };
     });
     var rawTotal = items.reduce(function (a, b) { return a + b.subtotal; }, 0);
-    var discount = p.discount || 0;
-    var total = Math.max(0, rawTotal - discount);
-    var paid = Math.min(p.paid || 0, total);
+    var discount = round2(p.discount);
+    var total = round2(Math.max(0, rawTotal - discount));
+    var paid = round2(Math.min(round2(p.paid), total));
     var no = 'S' + todayStr().replace(/-/g, '') + Math.floor(Math.random() * 9000 + 1000);
-    var order = { id: uid(), no: no, date: todayStr(), ts: Date.now(), customerId: p.customerId || null, customerName: p.customerName || '散客', items: items, discount: discount, total: total, paid: paid, method: p.method || '现金' };
+    var cust = p.customerId ? get('customers', p.customerId) : null;
+    var order = {
+      id: uid(), no: no, date: todayStr(), ts: Date.now(),
+      customerId: p.customerId || null,
+      customerName: (cust && cust.name) || p.customerName || '散客',
+      items: items, discount: discount, total: total, paid: paid, method: p.method || '现金'
+    };
     state.sales.push(order);
-    // 出库
     items.forEach(function (it) {
       var prod = get('products', it.productId);
-      if (prod) { prod.stock = Math.max(0, prod.stock - it.qty); }
+      prod.stock = prod.stock - it.qty;            // 已确保充足，直减，不再静默截断
       state.stockLogs.push({ id: uid(), date: todayStr(), type: 'out', productId: it.productId, productName: it.name, qty: it.qty, remark: '销售出库 ' + no });
     });
     if (paid > 0) state.finance.push({ id: uid(), date: todayStr(), type: 'receive', party: order.customerName, amount: paid, remark: '销售收款 ' + no });
@@ -172,24 +298,37 @@
 
   function recordPurchase(p) {
     ensure();
-    var items = p.items.map(function (it) {
+    var lines = normalizeLines(p.items);
+    var missing = lines.filter(function (it) { return !get('products', it.productId); });
+    if (missing.length) {
+      var e2 = new Error('商品不存在或已删除，无法入库');
+      e2.code = 'PRODUCT_NOT_FOUND';
+      e2.detail = missing;
+      throw e2;
+    }
+    var items = lines.map(function (it) {
       var prod = get('products', it.productId);
-      return { productId: prod.id, name: prod.name, unit: prod.unit, qty: it.qty, price: it.price, subtotal: it.qty * it.price };
+      return { productId: prod.id, name: prod.name, unit: prod.unit, qty: it.qty, price: it.price, subtotal: round2(it.qty * it.price) };
     });
     var rawTotal = items.reduce(function (a, b) { return a + b.subtotal; }, 0);
-    var discount = p.discount || 0;
-    var total = Math.max(0, rawTotal - discount);
-    var paid = Math.min(p.paid || 0, total);
+    var discount = round2(p.discount);
+    var total = round2(Math.max(0, rawTotal - discount));
+    var paid = round2(Math.min(round2(p.paid), total));
     var no = 'P' + todayStr().replace(/-/g, '') + Math.floor(Math.random() * 9000 + 1000);
-    var order = { id: uid(), no: no, date: todayStr(), ts: Date.now(), supplierId: p.supplierId || null, supplierName: p.supplierName || '', items: items, discount: discount, total: total, paid: paid, method: p.method || '银行' };
+    var sup = p.supplierId ? get('suppliers', p.supplierId) : null;
+    var order = {
+      id: uid(), no: no, date: todayStr(), ts: Date.now(),
+      supplierId: p.supplierId || null,
+      supplierName: (sup && sup.name) || p.supplierName || '',
+      items: items, discount: discount, total: total, paid: paid, method: p.method || '银行'
+    };
     state.purchases.push(order);
-    // 入库
     items.forEach(function (it) {
       var prod = get('products', it.productId);
-      if (prod) { prod.stock += it.qty; }
+      prod.stock += it.qty;
       state.stockLogs.push({ id: uid(), date: todayStr(), type: 'in', productId: it.productId, productName: it.name, qty: it.qty, remark: '采购入库 ' + no });
     });
-    if (paid > 0) state.finance.push({ id: uid(), date: todayStr(), type: 'pay', party: order.supplierName, amount: paid, remark: '采购付款 ' + no });
+    if (paid > 0) state.finance.push({ id: uid(), date: todayStr(), type: 'pay', party: order.supplierName || '其他供应商', amount: paid, remark: '采购付款 ' + no });
     persist();
     return order;
   }
@@ -204,25 +343,72 @@
     return prod;
   }
 
-  // 收款/付款：按时间顺序冲抵未结清单据
+  /**
+   * 往来收付款 —— 按开单时间 FIFO 冲抵未结清单据（S1-03 BUG-03）
+   * 只把**真正冲抵掉**的金额写入财务流水，超出部分原样返回给 UI 提示。
+   * partyId 传 '__walkin__' / '__nosupplier__' 时冲抵所有无客户/无供应商的单据。
+   * @returns {{applied:number, ignored:number, orders:number}}
+   */
   function applyPayment(kind, partyId, amount) {
     ensure();
-    var col = kind === 'customer' ? 'sales' : 'purchases';
-    var partyKey = kind === 'customer' ? 'customerId' : 'supplierId';
-    var list = (state[col] || []).filter(function (o) { return o[partyKey] === partyId && o.paid < o.total; })
-      .sort(function (a, b) { return a.ts - b.ts; });
-    var remain = amount;
+    var isCust = kind === 'customer';
+    var col = isCust ? 'sales' : 'purchases';
+    var partyKey = isCust ? 'customerId' : 'supplierId';
+    var virtual = partyId === WALKIN_ID || partyId === NOSUP_ID;
+    var list = (state[col] || []).filter(function (o) {
+      var hit = virtual ? !o[partyKey] : o[partyKey] === partyId;
+      return hit && !isPaidOff(o);
+    }).sort(function (a, b) { return a.ts - b.ts; });
+
+    var remain = round2(amount), applied = 0, touched = 0;
     list.forEach(function (o) {
-      if (remain <= 0) return;
-      var need = o.total - o.paid;
-      var pay = Math.min(need, remain);
-      o.paid += pay; remain -= pay;
+      if (remain <= 0.005) return;
+      var pay = Math.min(round2(o.total - o.paid), remain);
+      if (pay <= 0) return;
+      o.paid = round2(o.paid + pay);
+      remain = round2(remain - pay);
+      applied = round2(applied + pay);
+      touched++;
     });
-    var partyName = kind === 'customer'
-      ? (get('customers', partyId) || {}).name
-      : (get('suppliers', partyId) || {}).name;
-    state.finance.push({ id: uid(), date: todayStr(), type: kind === 'customer' ? 'receive' : 'pay', party: partyName, amount: amount, remark: (kind === 'customer' ? '客户收款' : '供应商付款') });
+
+    if (applied <= 0) return { applied: 0, ignored: round2(amount), orders: 0 };
+
+    var partyName = virtual
+      ? (isCust ? '散客' : '其他供应商')
+      : ((isCust ? get('customers', partyId) : get('suppliers', partyId)) || {}).name || (isCust ? '客户' : '供应商');
+    state.finance.push({
+      id: uid(), date: todayStr(),
+      type: isCust ? 'receive' : 'pay',
+      party: partyName, amount: applied,
+      remark: (isCust ? '客户收款' : '供应商付款') + '（冲抵 ' + touched + ' 张单）'
+    });
     persist();
+    return { applied: applied, ignored: round2(round2(amount) - applied), orders: touched };
+  }
+
+  /**
+   * 单据级收付款（S1-08 BUG-07）
+   * 只影响指定单据，超额自动截断到欠款额，并同步写财务流水。
+   * @param col 'sales' | 'purchases'
+   */
+  function receiveOnOrder(col, orderId, amount) {
+    ensure();
+    if (col !== 'sales' && col !== 'purchases') throw new Error('单据类型不合法');
+    var o = get(col, orderId);
+    if (!o) throw new Error('单据不存在');
+    var pay = Math.min(round2(amount), round2(o.total - o.paid));
+    if (pay <= 0) return { applied: 0, ignored: round2(amount) };
+    o.paid = round2(o.paid + pay);
+    var isSale = col === 'sales';
+    state.finance.push({
+      id: uid(), date: todayStr(),
+      type: isSale ? 'receive' : 'pay',
+      party: (isSale ? o.customerName : o.supplierName) || (isSale ? '散客' : '其他供应商'),
+      amount: pay,
+      remark: (isSale ? '销售收款 ' : '采购付款 ') + o.no
+    });
+    persist();
+    return { applied: pay, ignored: round2(round2(amount) - pay) };
   }
 
   /* ---------------- 聚合查询 ---------------- */
@@ -231,14 +417,15 @@
     var t = todayStr();
     var todaySales = state.sales.filter(function (s) { return s.date === t; });
     var revenue = todaySales.reduce(function (a, s) { return a + s.total; }, 0);
-    var warnings = state.products.filter(function (p) { return p.stock <= (p.lowStock || state.settings.lowStock); });
-    var receivables = state.customers.reduce(function (a, c) {
-      var d = state.sales.filter(function (s) { return s.customerId === c.id; }).reduce(function (x, s) { return x + (s.total - s.paid); }, 0);
-      return a + d;
-    }, 0);
+    var warnings = state.products.filter(function (p) { return p.stock <= (p.lowStock || state.settings.lowStock); })
+      .slice().sort(function (a, b) { return a.stock - b.stock; });
+    // 应收改为按单据聚合，散客欠款同样计入（S1-01 BUG-01）
+    var recv = round2(receivables().reduce(function (a, r) { return a + r.debt; }, 0));
     return {
-      revenue: revenue, orderCount: todaySales.length, stockWarnings: warnings.length,
-      receivables: receivables, warningList: warnings.slice(0, 5),
+      revenue: round2(revenue), orderCount: todaySales.length, stockWarnings: warnings.length,
+      receivables: recv,
+      payables: round2(payables().reduce(function (a, r) { return a + r.unpaid; }, 0)),
+      warningList: warnings.slice(0, 5),
       recentSales: state.sales.slice().sort(function (a, b) { return b.ts - a.ts; }).slice(0, 5),
       trend: salesTrend(7)
     };
@@ -271,39 +458,116 @@
       .filter(function (x) { return x.qty > 0; }).sort(function (a, b) { return b.qty - a.qty; }).slice(0, n || 5);
   }
 
+  /**
+   * 应收 —— 按**销售单**聚合（S1-01 BUG-01）
+   * 原实现按客户表聚合，导致散客（customerId=null）赊账被整体漏算。
+   */
   function receivables() {
     ensure();
-    return state.customers.map(function (c) {
-      var debt = state.sales.filter(function (s) { return s.customerId === c.id; }).reduce(function (a, s) { return a + (s.total - s.paid); }, 0);
-      return { id: c.id, name: c.name, phone: c.phone, debt: debt };
-    }).filter(function (x) { return x.debt > 0; }).sort(function (a, b) { return b.debt - a.debt; });
+    var map = {}, order = [];
+    state.sales.forEach(function (s) {
+      var debt = round2(s.total - s.paid);
+      if (debt <= 0.005) return;
+      var walkin = !s.customerId;
+      var k = walkin ? WALKIN_ID : s.customerId;
+      if (!map[k]) {
+        var c = walkin ? null : get('customers', s.customerId);
+        map[k] = {
+          id: walkin ? WALKIN_ID : s.customerId,
+          name: c ? c.name : (walkin ? '散客' : (s.customerName || '(已删除客户)')),
+          phone: c ? c.phone : '',
+          debt: 0, orders: 0, walkin: walkin
+        };
+        order.push(k);
+      }
+      map[k].debt = round2(map[k].debt + debt);
+      map[k].orders++;
+    });
+    return order.map(function (k) { return map[k]; }).sort(function (a, b) { return b.debt - a.debt; });
   }
 
+  /** 应付 —— 按**进货单**聚合，无供应商的单归「其他供应商」 */
   function payables() {
     ensure();
-    return state.suppliers.map(function (s) {
-      var unp = state.purchases.filter(function (p) { return p.supplierId === s.id; }).reduce(function (a, p) { return a + (p.total - p.paid); }, 0);
-      return { id: s.id, name: s.name, phone: s.phone, unpaid: unp };
-    }).filter(function (x) { return x.unpaid > 0; }).sort(function (a, b) { return b.unpaid - a.unpaid; });
+    var map = {}, order = [];
+    state.purchases.forEach(function (p) {
+      var unp = round2(p.total - p.paid);
+      if (unp <= 0.005) return;
+      var nosup = !p.supplierId;
+      var k = nosup ? NOSUP_ID : p.supplierId;
+      if (!map[k]) {
+        var s = nosup ? null : get('suppliers', p.supplierId);
+        map[k] = {
+          id: nosup ? NOSUP_ID : p.supplierId,
+          name: s ? s.name : (nosup ? '其他供应商' : (p.supplierName || '(已删除供应商)')),
+          phone: s ? s.phone : '',
+          unpaid: 0, orders: 0, walkin: nosup
+        };
+        order.push(k);
+      }
+      map[k].unpaid = round2(map[k].unpaid + unp);
+      map[k].orders++;
+    });
+    return order.map(function (k) { return map[k]; }).sort(function (a, b) { return b.unpaid - a.unpaid; });
   }
 
   function settings() { ensure(); return state.settings; }
   function saveSettings(patch) { ensure(); for (var k in patch) state.settings[k] = patch[k]; persist(); return state.settings; }
 
-  function exportData() { ensure(); return JSON.stringify(state, null, 2); }
-  function importData(json) {
-    var data = JSON.parse(json);
-    if (!data.products) throw new Error('数据格式不正确');
-    state = data; persist(); return state;
+  /* ---------------- 备份 / 恢复（S1-05 BUG-04） ---------------- */
+  function exportData() {
+    ensure();
+    var out = assign({}, state);
+    out.__meta = assign({}, state.__meta || {}, {
+      schema: SCHEMA, app: 'sale-erp', exportedAt: new Date().toISOString()
+    });
+    return JSON.stringify(out, null, 2);
   }
-  function reset() { STORE.removeItem(KEY); state = null; seed(); }
+
+  /**
+   * 导入备份：强校验 + 缺失集合补齐 + 失败回滚
+   * 拒绝非法 JSON / 非本系统备份；导入前留快照，写入失败则原样还原。
+   */
+  function importData(json) {
+    var data;
+    try { data = JSON.parse(json); }
+    catch (e) { throw new Error('文件不是合法 JSON，无法导入'); }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('备份内容为空或格式不正确');
+    if (!Array.isArray(data.products)) throw new Error('缺少商品数据，可能不是本系统的备份文件');
+
+    var snapshot = null;
+    try { snapshot = STORE.getItem(KEY); } catch (e) { snapshot = null; }
+
+    COLLECTIONS.forEach(function (c) { if (!Array.isArray(data[c])) data[c] = []; });
+    data.settings = assign({}, DEFAULT_SETTINGS, data.settings || {});
+    data.__meta = assign({}, data.__meta || {}, { schema: SCHEMA, importedAt: new Date().toISOString() });
+
+    var prev = state;
+    state = data;
+    if (!persist()) {                              // 写入失败 → 回滚到导入前
+      try { if (snapshot != null) STORE.setItem(KEY, snapshot); } catch (e) { /* 已在 persist 提示 */ }
+      state = prev;
+      throw new Error('导入失败：本地存储写入不成功，已保留原有数据');
+    }
+    return {
+      ok: true,
+      counts: COLLECTIONS.map(function (c) { return c + ':' + state[c].length; })
+    };
+  }
+
+  function reset() { try { STORE.removeItem(KEY); } catch (e) { /* ignore */ } state = null; seed(); normalize(); }
 
   root.DB = {
     init: ensure, all: all, get: get, insert: insert, update: update, remove: remove,
-    recordSale: recordSale, recordPurchase: recordPurchase, adjustStock: adjustStock, applyPayment: applyPayment,
+    recordSale: recordSale, recordPurchase: recordPurchase, adjustStock: adjustStock,
+    applyPayment: applyPayment, receiveOnOrder: receiveOnOrder,
     orderStatus: orderStatus, dashboard: dashboard, salesTrend: salesTrend, stockWarnings: stockWarnings,
     topProducts: topProducts, receivables: receivables, payables: payables,
     settings: settings, saveSettings: saveSettings,
-    exportData: exportData, importData: importData, reset: reset, uid: uid, todayStr: todayStr
+    exportData: exportData, importData: importData, reset: reset,
+    uid: uid, todayStr: todayStr, round2: round2, isPaidOff: isPaidOff,
+    onPersistError: function (fn) { onPersistError = fn; },
+    persistOk: persistOk, storageInfo: storageInfo,
+    WALKIN_ID: WALKIN_ID, NOSUP_ID: NOSUP_ID
   };
 })(typeof window !== 'undefined' ? window : globalThis);

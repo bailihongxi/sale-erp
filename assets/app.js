@@ -45,6 +45,24 @@
   function openSheet() { document.getElementById('sheetMask').classList.add('show'); }
   function closeSheet() { document.getElementById('sheetMask').classList.remove('show'); }
 
+  /* ---------------- 持久化失败常驻横幅（BUG-05） ---------------- */
+  function showPersistBanner(msg) {
+    var el = document.getElementById('persistBanner');
+    if (!el) return;
+    var m = document.getElementById('persistBannerMsg');
+    if (m && msg) m.textContent = msg;
+    el.classList.add('show');
+  }
+  function hidePersistBanner() {
+    var el = document.getElementById('persistBanner');
+    if (el) el.classList.remove('show');
+  }
+  window.App = window.App || {};
+  window.App.retryPersist = function () {
+    if (DB.persistOk()) { hidePersistBanner(); toast('数据已保存', 'ok'); }
+    else toast('仍然无法保存，请先导出备份', 'err');
+  };
+
   /* ---------------- 导航 ---------------- */
   var NAV = [
     { group: '经营' },
@@ -307,10 +325,16 @@
   function renderPosCart() {
     var c = $('#posCart'); if (!c) return;
     var ids = Object.keys(pos.items);
+    var over = [];                      // 超库存的行，用于结算前拦截提示
     var rows = ids.length ? ids.map(function (pid) {
       var it = pos.items[pid], p = DB.get('products', pid);
-      return '<div class="cart-item" data-pid="' + pid + '">' +
-        '<div class="nm">' + esc(p.name) + '<div class="meta muted">' + money(it.price) + '/' + esc(p.unit) + '</div></div>' +
+      if (!p) return '';
+      var isOver = it.qty > p.stock;
+      if (isOver) over.push(p.name + '（需 ' + it.qty + '，存 ' + p.stock + '）');
+      return '<div class="cart-item' + (isOver ? ' over' : '') + '" data-pid="' + pid + '">' +
+        '<div class="nm">' + esc(p.name) +
+        (isOver ? '<span class="cart-warn">超库存</span>' : '') +
+        '<div class="meta muted">' + money(it.price) + '/' + esc(p.unit) + ' · 库存 ' + p.stock + '</div></div>' +
         '<div class="qty"><button data-act="dec">−</button><input value="' + it.qty + '" data-act="set"/><button data-act="inc">＋</button></div>' +
         '<div class="mono" style="width:78px;text-align:right">' + money(it.qty * it.price) + '</div>' +
         '<button class="btn btn--sm btn--danger" data-act="del">✕</button></div>';
@@ -336,6 +360,7 @@
       '<div class="field" style="margin:8px 0"><label>实收金额</label><input id="posPaid" type="number" value="' + paid + '"/></div>' +
       '<div class="field"><label>收款方式</label><select id="posMethod"><option ' + (pos.method === '现金' ? 'selected' : '') + '>现金</option><option ' + (pos.method === '微信' ? 'selected' : '') + '>微信</option><option ' + (pos.method === '支付宝' ? 'selected' : '') + '>支付宝</option><option ' + (pos.method === '银行' ? 'selected' : '') + '>银行</option><option ' + (pos.method === '欠款' ? 'selected' : '') + '>欠款</option></select></div>' +
       '<div class="settle-line"><span>欠款</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' +
+      (over.length ? '<div class="cart-warn" style="display:block;margin-top:8px;padding:6px 8px">库存不足：' + esc(over.join('、')) + '，请调整数量或先入库</div>' : '') +
       '<button class="btn btn--primary btn--block mt12" onclick="App.settlePos()">💰 确认结算</button>' +
       '</div></div>';
 
@@ -348,7 +373,18 @@
       row.querySelector('[data-act="inc"]').addEventListener('click', function () { pos.items[pid].qty++; renderPosCart(); });
       row.querySelector('[data-act="dec"]').addEventListener('click', function () { if (pos.items[pid].qty > 1) pos.items[pid].qty--; else delete pos.items[pid]; renderPosCart(); });
       row.querySelector('[data-act="del"]').addEventListener('click', function () { delete pos.items[pid]; renderPosCart(); });
-      row.querySelector('[data-act="set"]').addEventListener('input', function (e) { var v = parseInt(e.target.value) || 1; pos.items[pid].qty = v; });
+      // 手输数量：input/change 都要即时重算合计与超库存提示（重绘后把光标还回原输入框）
+      var setQty = function (e) {
+        var v = parseInt(e.target.value, 10);
+        if (!(v > 0)) v = 1;
+        if (!pos.items[pid]) return;
+        pos.items[pid].qty = v;
+        renderPosCart();
+        var back = c.querySelector('.cart-item[data-pid="' + pid + '"] [data-act="set"]');
+        if (back && back.focus) { try { back.focus(); back.setSelectionRange(String(v).length, String(v).length); } catch (ignore) { } }
+      };
+      row.querySelector('[data-act="set"]').addEventListener('input', setQty);
+      row.querySelector('[data-act="set"]').addEventListener('change', setQty);
     });
   }
   window.App.clearPos = function () { pos.items = {}; pos.discount = 0; pos.paid = 0; renderPosCart(); };
@@ -360,9 +396,18 @@
     var custName = custId ? (DB.get('customers', custId) || {}).name : '散客';
     var method = pos.method === '欠款' ? '欠款' : pos.method;
     var paid = pos.method === '欠款' ? 0 : (pos.paid || 0);
-    var o = DB.recordSale({ customerId: custId, customerName: custName, items: items, discount: pos.discount || 0, paid: paid, method: method });
+    var o;
+    try {
+      o = DB.recordSale({ customerId: custId, customerName: custName, items: items, discount: pos.discount || 0, paid: paid, method: method });
+    } catch (e) {
+      // 库存不足整单拒绝：保留购物车内容，方便用户改数量或先入库（BUG-02 UI 侧）
+      if (e && (e.code === 'OUT_OF_STOCK' || e.code === 'EMPTY_ITEMS')) { toast(e.message, 'err'); renderPosCart(); return; }
+      toast('开单失败：' + (e && e.message || e), 'err');
+      return;
+    }
     pos.items = {}; pos.discount = 0; pos.paid = 0; pos.method = '现金';
     toast('开单成功：' + o.no, 'ok');
+    renderPosGrid();          // 库存已变化，同步刷新商品卡上的库存数字
     renderPosCart();
   };
 
@@ -398,18 +443,34 @@
   };
   window.App.receiveSale = function (id) {
     var o = DB.get('sales', id); if (!o) return;
-    var debt = o.total - o.paid;
+    var debt = DB.round2(o.total - o.paid);
+    var isWalkin = !o.customerId;
     openModal('收款 — ' + o.no,
       '<div class="field"><label>客户</label><input value="' + esc(o.customerName) + '" disabled/></div>' +
       '<div class="field"><label>待收金额</label><input value="' + debt + '" disabled/></div>' +
-      '<div class="field"><label>本次收款</label><input id="rcvAmt" type="number" value="' + debt + '"/></div>',
-      '<button class="btn" onclick="App.closeModal()">取消</button><button class="btn btn--primary" onclick="App.doReceive(\'' + o.customerId + '\',\'' + id + '\')">确认收款</button>');
+      '<div class="field"><label>本次收款</label><input id="rcvAmt" type="number" step="0.01" value="' + debt + '"/></div>' +
+      '<p class="muted">' + (isWalkin
+        ? '散客单据：收款只冲抵本单。'
+        : '客户单据：收款按开单时间先后自动冲抵该客户的未结清单据。') + '</p>',
+      '<button class="btn" onclick="App.closeModal()">取消</button>' +
+      '<button class="btn btn--primary" onclick="App.doReceive(\'' + (o.customerId || '') + '\',\'' + id + '\')">确认收款</button>');
   };
+  /** cid 为空 = 散客单：走单据级收款，只影响本单且照常记流水（BUG-07） */
   window.App.doReceive = function (cid, oid) {
     var amt = parseFloat($('#rcvAmt').value) || 0;
-    if (cid) DB.applyPayment('customer', cid, amt); else DB.update('sales', oid, { paid: DB.get('sales', oid).total });
-    closeModal(); toast('收款成功', 'ok'); route();
+    if (amt <= 0) { toast('请输入收款金额', 'err'); return; }
+    var r = cid ? DB.applyPayment('customer', cid, amt) : DB.receiveOnOrder('sales', oid, amt);
+    closeModal();
+    reportPayment(r, '收款');
+    route();
   };
+  /** 统一提示实际冲抵与被忽略的超额部分（BUG-03） */
+  function reportPayment(r, label) {
+    r = r || { applied: 0, ignored: 0 };
+    if (r.applied <= 0) { toast('没有可冲抵的欠款，未记账', 'err'); return; }
+    if (r.ignored > 0) toast('已' + label + ' ' + money(r.applied) + '，超出 ' + money(r.ignored) + ' 未记录', 'ok');
+    else toast(label + '成功 ' + money(r.applied), 'ok');
+  }
 
   /* ---------- 采购管理 ---------- */
   views.purchase = function () {
@@ -494,7 +555,8 @@
   /* ---------- 库存管理 ---------- */
   views.inventory = function () {
     document.getElementById('viewTitle').textContent = '库存管理';
-    var list = DB.all('products').sort(function (a, b) { return a.stock - b.stock; });
+    // 必须 slice() 后再排序：DB.all 返回的是内部数组引用，直接 sort 会污染商品档案顺序（BUG-08）
+    var list = DB.all('products').slice().sort(function (a, b) { return a.stock - b.stock; });
     var thr = DB.settings().lowStock;
     var rows = list.map(function (p) {
       var low = p.stock <= (p.lowStock || thr);
@@ -602,18 +664,25 @@
   };
   window.App.payDebt = function (kind, pid) {
     var isC = kind === 'customer';
-    var party = isC ? DB.get('customers', pid) : DB.get('suppliers', pid);
-    var debt = isC ? DB.receivables().find(function (r) { return r.id === pid; }).debt : DB.payables().find(function (p) { return p.id === pid; }).unpaid;
+    // 往来主体一律取自聚合结果：散客 / 其他供应商这类虚拟主体在客户表里查不到（BUG-01 UI 侧）
+    var row = (isC ? DB.receivables() : DB.payables()).filter(function (x) { return x.id === pid; })[0];
+    if (!row) { toast('该往来方已无欠款', 'err'); return; }
+    var debt = isC ? row.debt : row.unpaid;
     openModal(isC ? '客户收款' : '供应商付款',
-      '<div class="field"><label>' + (isC ? '客户' : '供应商') + '</label><input value="' + esc(party.name) + '" disabled/></div>' +
-      '<div class="field"><label>待' + (isC ? '收' : '付') + '金额</label><input value="' + debt + '" disabled/></div>' +
-      '<div class="field"><label>本次' + (isC ? '收款' : '付款') + '金额</label><input id="pdAmt" type="number" value="' + debt + '"/></div>',
+      '<div class="field"><label>' + (isC ? '客户' : '供应商') + '</label><input value="' + esc(row.name) + (row.walkin ? '（合计）' : '') + '" disabled/></div>' +
+      (row.phone ? '<div class="field"><label>联系电话</label><input value="' + esc(row.phone) + '" disabled/></div>' : '') +
+      '<div class="field"><label>待' + (isC ? '收' : '付') + '金额（' + row.orders + ' 张单）</label><input value="' + debt + '" disabled/></div>' +
+      '<div class="field"><label>本次' + (isC ? '收款' : '付款') + '金额</label><input id="pdAmt" type="number" step="0.01" value="' + debt + '"/></div>' +
+      '<p class="muted">按开单时间先后自动冲抵未结清单据，超出欠款的部分不会记账。</p>',
       '<button class="btn" onclick="App.closeModal()">取消</button><button class="btn btn--primary" onclick="App.doPayDebt(\'' + kind + '\',\'' + pid + '\')">确认</button>');
   };
   window.App.doPayDebt = function (kind, pid) {
     var amt = parseFloat($('#pdAmt').value) || 0;
-    DB.applyPayment(kind, pid, amt);
-    closeModal(); toast('已记录', 'ok'); route();
+    if (amt <= 0) { toast('请输入金额', 'err'); return; }
+    var r = DB.applyPayment(kind, pid, amt);
+    closeModal();
+    reportPayment(r, kind === 'customer' ? '收款' : '付款');
+    route();
   };
 
   /* ---------- 系统设置 ---------- */
@@ -686,6 +755,8 @@
 
   /* ---------------- 路由 ---------------- */
   function route() {
+    closeSheet();                 // 兜底：任何路由切换都关掉手机版菜单与弹窗（BUG-06）
+    closeModal();
     var id = (location.hash || '').replace('#', '') || 'dashboard';
     if (!views[id]) id = 'dashboard';
     highlight(id);
@@ -706,8 +777,23 @@
   document.getElementById('sheetMask').addEventListener('click', function (e) {
     if (e.target.id === 'sheetMask') closeSheet();
   });
+  // 手机版：点菜单项后必须立刻收起遮罩，否则页面被盖住无法操作（BUG-06）
+  document.getElementById('sheetNav').addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.nav__item')) closeSheet();
+  });
+  // 弹窗：点遮罩空白处 / 按 ESC 关闭（MNR-05）
+  document.getElementById('modalMask').addEventListener('click', function (e) {
+    if (e.target.id === 'modalMask') closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' && e.keyCode !== 27) return;
+    if (document.getElementById('sheetMask').classList.contains('show')) { closeSheet(); return; }
+    if (document.getElementById('modalMask').classList.contains('show')) closeModal();
+  });
 
   /* ---------------- 启动 ---------------- */
+  // 先注册持久化失败回调，确保首次 init/seed 的写入失败也能被用户看到（BUG-05）
+  DB.onPersistError(function (msg) { showPersistBanner(msg); });
   DB.init();
   var s0 = DB.settings();
   document.getElementById('brandName').textContent = s0.shopName;

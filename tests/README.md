@@ -31,15 +31,20 @@ npm run test:ui    # 只跑界面层
 2. **`<script src="assets/*.js">` 在 jsdom 中不会自动加载** —— 需手动按 `db.js → app.js` 顺序把文件内容注入 `<script>`。
 3. **`URL.createObjectURL` 未实现** —— 导出备份测试需先打桩。
 4. **`hashchange` 是异步派发的** —— 测试用 `App.__route()` 同步触发渲染。
+5. **`localStorage` 是 Proxy，`localStorage.setItem = fn` 打桩无效** —— 会被当成写入一个名叫
+   `setItem` 的存储项，方法本身没被替换（测试静默失效）。模拟写满必须打
+   `window.Storage.prototype.setItem`，用 `boot().withQuotaExceeded(fn)`。
+6. **单个 spec 崩溃不再中断整轮** —— runner 会把崩溃登记成一条失败断言并继续跑其余 spec，
+   避免一个 `TypeError` 掩盖后面所有结果。
 
 ## 基线记录
 
 | 阶段 | 断言数 | 说明 |
 |---|---|---|
 | Sprint 0（基线固化） | **107 passed / 0 failed** | A1–A10 数据层基线 + D1–D11 界面层基线 |
-| Sprint 1（P0 修复） | 176 passed / 0 failed | 追加 B1–B8 数据层回归 + E1–E4 交互回归 |
-| Sprint 2（验收补齐） | 216 passed / 0 failed | 追加 F1–F6 |
-| Sprint 3（投产可用性） | 248 passed / 0 failed | 追加 C1–C4 + G1–G4 |
-| Sprint 4（收口） | 258 passed / 0 failed | 追加手机视口验收 H1–H2 |
+| Sprint 1（P0 修复） | **201 passed / 0 failed** | 追加 B1–B9 数据层回归（+64）+ E1–E6 交互回归（+30） |
+| Sprint 2（验收补齐） | 目标 ≥ 240 | 追加 F1–F6 |
+| Sprint 3（投产可用性） | 目标 ≥ 275 | 追加 C1–C4 + G1–G4 |
+| Sprint 4（收口） | 目标 ≥ 285 | 追加手机视口验收 H1–H2 |
 
 > 断言数只允许增加。若某次改动导致总数下降，说明有测试被删除或跳过 —— 视为不合格。

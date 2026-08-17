@@ -48,6 +48,14 @@
     </div>
   </div>
 
+  <!-- 持久化失败常驻横幅（BUG-05）：默认隐藏，写入失败时由 app.js 加 .show -->
+  <div class="persist-banner" id="persistBanner" role="alert">
+    <span class="persist-banner__ico">⚠️</span>
+    <span class="persist-banner__msg" id="persistBannerMsg">本地存储写入失败，最近的改动可能未保存。请立即导出备份。</span>
+    <button class="btn btn--sm" onclick="App.exportData()">立即导出备份</button>
+    <button class="btn btn--sm btn--ghost" onclick="App.retryPersist()">重试保存</button>
+  </div>
+
   <div class="toast-wrap" id="toastWrap"></div>
 
   <script src="assets/db.js"></script>

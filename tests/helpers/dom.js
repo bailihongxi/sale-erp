@@ -6,7 +6,10 @@
       → 必须用 https 源；
    2) index.html 里的 <script src="assets/*.js"> 在 jsdom 中不会自动加载（无网络/无 resources）
       → 手动把文件内容以 <script> 形式注入 document.body，保证执行顺序 db.js → app.js；
-   3) 每个 JSDOM 实例拥有独立 localStorage，天然隔离，无需手工清理。
+   3) 每个 JSDOM 实例拥有独立 localStorage，天然隔离，无需手工清理；
+   4) jsdom 的 localStorage 是 Proxy —— `localStorage.setItem = fn` 不会覆盖方法，
+      而是被当成写入一个名为 "setItem" 的存储项（等于打桩失败、静默无效）。
+      模拟写入失败必须改打 `window.Storage.prototype.setItem`，见 withQuotaExceeded()。
    ============================================================ */
 'use strict';
 
@@ -83,8 +86,22 @@ function boot(opts) {
     $$: function (sel) { return Array.prototype.slice.call(window.document.querySelectorAll(sel)); },
     text: function (sel) { var e = window.document.querySelector(sel); return e ? e.textContent : ''; },
     fire: function (el, type) { el.dispatchEvent(new window.Event(type, { bubbles: true })); },
-    click: function (el) { el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true })); }
+    click: function (el) { el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true })); },
+    /** 在 fn 执行期间让 localStorage.setItem 抛配额异常，结束后自动恢复 */
+    withQuotaExceeded: function (fn) { return withQuotaExceeded(window, fn); }
   };
+}
+
+/** 模拟浏览器本地存储写满：打 Storage.prototype 而非实例（见文件头第 4 条坑） */
+function withQuotaExceeded(window, fn) {
+  var proto = window.Storage.prototype;
+  var orig = proto.setItem;
+  proto.setItem = function () {
+    var e = new window.DOMException('quota exceeded', 'QuotaExceededError');
+    throw e;
+  };
+  try { return fn(); }
+  finally { proto.setItem = orig; }
 }
 
 function inject(window, rel) {
@@ -105,4 +122,4 @@ function makeConsole(errors) {
   return vc;
 }
 
-module.exports = { boot: boot, read: read, ROOT: ROOT };
+module.exports = { boot: boot, read: read, ROOT: ROOT, withQuotaExceeded: withQuotaExceeded };
