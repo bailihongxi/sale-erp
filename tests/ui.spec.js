@@ -628,6 +628,19 @@ function run() {
   check('JSON 数组导入成功', i1c.DB.all('products').filter(function (p) { return p.name.indexOf('JSON导入') >= 0; }).length === 2);
   check('批量导入全程无 JS 错误', i1.errors.length + i1b.errors.length + i1c.errors.length === 0,
     [i1.errors, i1b.errors, i1c.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
+  section('I2 销售开单结算与搜索位置互换');
+  var i2 = boot({ hash: '#pos' });
+  var posEl = i2.$('.pos');
+  check('开单容器下有两个卡片', posEl && posEl.children.length === 2, posEl && posEl.children.length);
+  var i2first = posEl && posEl.children[0];
+  var i2last = posEl && posEl.children[1];
+  check('结算购物车位于首位（左侧/上方）', !!i2first && i2first.id === 'posCart', i2first && i2first.id);
+  check('搜索商品区位于次位（右侧/下方）', !!i2last && !!i2last.querySelector('#posKw'));
+  var i2css = helpers.read('assets/style.css');
+  check('桌面端 .pos 列宽先结算区 380px，后商品区 1fr',
+    /\.pos\s*\{[^}]*grid-template-columns:\s*380px[^1-9]*1fr/.test(i2css),
+    i2css.match(/\.pos\s*\{[^}]*\}/));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */

@@ -211,7 +211,7 @@ a{color:inherit;text-decoration:none}
 .mono{font-variant-numeric:tabular-nums}
 
 /* 开单两栏 */
-.pos{display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start}
+.pos{display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start}
 .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .prod-card{border:1px solid var(--c-border);border-radius:var(--r);padding:12px;background:#fff;text-align:center;transition:border .15s,transform .1s}
 .prod-card:hover{border-color:var(--c-primary);transform:translateY(-2px)}

@@ -438,12 +438,12 @@
     app.innerHTML =
       '<div class="view-head"><h2>销售开单</h2><span class="sub">选商品 → 填数量 → 结算（支持欠款/多单位）</span></div>' +
       '<div class="pos">' +
+      '<div class="card cart" id="posCart"></div>' +
       '<div class="card card__pad">' +
       '<div class="search" style="margin-bottom:10px"><span>🔍</span><input id="posKw" placeholder="搜索商品名称/品牌/型号/类型"/></div>' +
       '<div class="cats" id="posCats">' + chips + '</div>' +
       '<div class="prod-grid" id="posGrid"></div>' +
       '</div>' +
-      '<div class="card cart" id="posCart"></div>' +
       '</div>';
 
     $('#posKw').addEventListener('input', function (e) { pos.kw = e.target.value; filterPos(); });
