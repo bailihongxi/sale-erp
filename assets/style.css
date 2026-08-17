@@ -237,6 +237,39 @@ a{color:inherit;text-decoration:none}
 
 /* 图表(简易SVG) */
 .chart{width:100%;height:auto}
+
+/* 存储位置徽标（GAP-05）——提示当前数据落在哪个 origin */
+.origin-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--c-muted);
+  background:var(--c-bg);border:1px solid var(--c-border);border-radius:999px;padding:3px 9px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.origin-badge--file{color:var(--c-warning);border-color:var(--c-warning-50);background:var(--c-warning-50)}
+
+/* 首次打开引导（GAP-05） */
+.firstrun-hint{display:none;position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:210;
+  align-items:center;gap:10px;max-width:560px;padding:10px 14px;border-radius:var(--r);
+  background:#1F2733;color:#fff;font-size:13px;line-height:1.5;box-shadow:var(--sh-2)}
+.firstrun-hint.show{display:flex}
+.firstrun-hint__ico{flex:none}
+.firstrun-hint__msg{flex:1;min-width:0}
+.firstrun-hint .btn--ghost{background:transparent;border-color:rgba(255,255,255,.6);color:#fff}
+
+/* 导出提醒黄条（S3-03） */
+.export-reminder{display:none;align-items:center;gap:8px;padding:10px 16px;margin-bottom:14px;
+  background:var(--c-warning-50);border:1px solid var(--c-warning);border-radius:var(--r);font-size:13px;color:#8a5a00}
+.export-reminder.show{display:flex}
+
+/* 存储用量进度条（S3-03） */
+.usage{margin-top:10px}
+.usage__bar{height:8px;border-radius:999px;background:var(--c-bg);overflow:hidden;margin-top:6px}
+.usage__fill{height:100%;border-radius:999px;background:var(--c-success);transition:width .3s}
+.usage__fill--warn{background:var(--c-warning)}
+.usage__fill--danger{background:var(--c-danger)}
+
+/* 空态引导（S3-04） */
+.empty-guide{padding:48px 16px;text-align:center;color:var(--c-muted)}
+.empty-guide__ico{font-size:40px;opacity:.5}
+.empty-guide__title{font-size:15px;font-weight:700;color:var(--c-text);margin:10px 0 6px}
+.empty-guide__desc{font-size:13px;margin-bottom:14px}
+.empty-guide .btn{margin:4px}
 .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--c-muted);margin-top:8px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
 

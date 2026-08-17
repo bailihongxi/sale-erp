@@ -182,13 +182,25 @@
       return '<div class="row between" style="padding:6px 0"><span>' + (i + 1) + '. ' + esc(p.name) + '</span><span class="mono">' + p.qty + ' 件</span></div>';
     }).join('') || '<div class="empty">暂无销量</div>';
 
+    var reminder = exportReminderHtml();
+    var blankGuide = (DB.all('products').length === 0)
+      ? '<div class="mt16">' + emptyGuide({
+        ico: '📦', title: '还没有数据',
+        desc: '先从下面两步开始：① 新增商品　② 建供应商并进货',
+        actions: '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button>' +
+          '<button class="btn" onclick="location.hash=\'#purchase\'">进货管理</button>'
+      }) + '</div>'
+      : '';
+
     app.innerHTML =
+      reminder +
       '<div class="grid grid--kpi">' +
       kpiCard('今日营收', money(d.revenue), '💰', '') +
       kpiCard('今日订单', d.orderCount + ' 单', '🧾', 'kpi--accent') +
       kpiCard('库存预警', d.stockWarnings + ' 项', '⚠️', 'kpi--danger') +
       kpiCard('应收欠款', money(d.receivables), '🏦', 'kpi--warning') +
       '</div>' +
+      blankGuide +
       '<div class="grid grid--2 mt16">' +
       card('近 7 天销售趋势', barChart(d.trend.map(function (x) { return x.date; }), d.trend.map(function (x) { return x.total; }), '#2D5BE3')) +
       card('库存预警（' + d.stockWarnings + '）', warn) +
@@ -203,6 +215,17 @@
   }
   function card(title, body, extra) {
     return '<div class="card"><div class="card__head"><h3>' + esc(title) + '</h3>' + (extra || '') + '</div><div class="card__pad">' + body + '</div></div>';
+  }
+
+  /** 「N 天未备份」提醒黄条（S3-03）：超过 7 天没导出就提示，刚导出则不显示 */
+  function exportReminderHtml() {
+    var le = DB.settings().lastExportAt;
+    if (le) {
+      var days = Math.floor((Date.now() - new Date(le).getTime()) / 86400000);
+      if (days <= 7) return '';
+    }
+    var txt = le ? ('已 ' + Math.floor((Date.now() - new Date(le).getTime()) / 86400000) + ' 天') : '从未';
+    return '<div class="export-reminder show" id="exportReminder">⚠️ 已 ' + txt + '未导出备份，建议到「数据管理」导出一份，防止数据丢失。</div>';
   }
 
   /* ---------- 商品管理 ---------- */
@@ -236,24 +259,32 @@
       return '<button class="chip ' + (filter.cat === c ? 'active' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>';
     }).join('');
 
+    var hasProd = list.length > 0;
+    var bodyBlock = hasProd
+      ? '<div class="card"><table class="table"><thead><tr>' +
+        '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>分类</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
+        '</tr></thead><tbody id="prodBody">' + rows + '</tbody></table></div>'
+      : emptyGuide({ ico: '📦', title: '还没有商品', desc: '新增第一个商品，开始管理你的库存',
+          actions: '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增第一个商品</button>' });
+
     app.innerHTML =
       '<div class="view-head"><h2>商品管理</h2><span class="sub">共 ' + list.length + ' 个商品</span>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button></div>' +
-      '<div class="row wrap" style="margin-bottom:12px">' +
-      '<div class="search"><span>🔍</span><input id="prodKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(filter.kw) + '"/></div>' +
-      '</div>' +
-      '<div class="cats">' + chips + '</div>' +
-      '<div class="card"><table class="table"><thead><tr>' +
-      '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>分类</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
-      '</tr></thead><tbody id="prodBody">' + rows + '</tbody></table></div>';
+      (hasProd ? '<div class="row wrap" style="margin-bottom:12px">' +
+        '<div class="search"><span>🔍</span><input id="prodKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(filter.kw) + '"/></div>' +
+        '</div><div class="cats">' + chips + '</div>' : '') +
+      bodyBlock;
 
-    $('#prodKw').addEventListener('input', function (e) { filter.kw = e.target.value; renderProdRows(); });
-    app.querySelectorAll('.chip').forEach(function (c) {
-      c.addEventListener('click', function () { filter.cat = c.getAttribute('data-cat'); renderProdRows(); });
-    });
+    if (hasProd) {
+      $('#prodKw').addEventListener('input', function (e) { filter.kw = e.target.value; renderProdRows(); });
+      app.querySelectorAll('.chip').forEach(function (c) {
+        c.addEventListener('click', function () { filter.cat = c.getAttribute('data-cat'); renderProdRows(); });
+      });
+    }
     function renderProdRows() {
       var body = $('#prodBody');
+      if (!body) return;
       body.innerHTML = list.filter(function (p) {
         if (filter.cat !== '全部' && p.category !== filter.cat) return false;
         if (filter.kw && (p.name + p.brand + p.model + p.type).toLowerCase().indexOf(filter.kw.toLowerCase()) < 0) return false;
@@ -728,19 +759,29 @@
     var title = isC ? '客户管理' : '供应商';
     var fKey = isC ? 'custFilter' : 'supFilter';
     var f = uiState[fKey] || (uiState[fKey] = { kw: '' });
+    var all = DB.all(col);
+    var hasAny = all.length > 0;
     document.getElementById('viewTitle').textContent = title;
+    var tableCard = hasAny
+      ? '<div class="card"><table class="table"><thead><tr>' +
+        '<th>' + (isC ? '客户名称' : '供应商名称') + '</th><th>电话</th><th>地址</th>' +
+        '<th class="right">累计交易额</th><th class="right">' + (isC ? '当前欠款' : '当前应付') + '</th>' +
+        '<th>状态</th><th class="right">操作</th>' +
+        '</tr></thead><tbody id="' + (isC ? 'custBody' : 'supBody') + '"></tbody></table></div>'
+      : emptyGuide({ ico: isC ? '👥' : '🏭', title: '还没有' + (isC ? '客户' : '供应商'),
+          desc: '新增第一个' + (isC ? '客户' : '供应商') + '，开单时即可选择',
+          actions: '<button class="btn btn--primary" onclick="App.' + (isC ? 'editCustomer' : 'editSupplier') + '()">＋ 新增' + (isC ? '客户' : '供应商') + '</button>' });
+
     app.innerHTML =
       '<div class="view-head"><h2>' + title + '</h2><span class="sub" id="partySub"></span>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn--primary" onclick="App.' + (isC ? 'editCustomer' : 'editSupplier') + '()">＋ 新增' + (isC ? '客户' : '供应商') + '</button></div>' +
-      '<div class="row wrap" style="margin-bottom:12px"><div class="search"><span>🔍</span>' +
-      '<input id="' + (isC ? 'custKw' : 'supKw') + '" placeholder="搜索名称 / 电话 / 地址" value="' + esc(f.kw) + '"/></div></div>' +
-      '<div class="card"><table class="table"><thead><tr>' +
-      '<th>' + (isC ? '客户名称' : '供应商名称') + '</th><th>电话</th><th>地址</th>' +
-      '<th class="right">累计交易额</th><th class="right">' + (isC ? '当前欠款' : '当前应付') + '</th>' +
-      '<th>状态</th><th class="right">操作</th>' +
-      '</tr></thead><tbody id="' + (isC ? 'custBody' : 'supBody') + '"></tbody></table></div>';
-    $('#' + (isC ? 'custKw' : 'supKw')).addEventListener('input', function (e) { f.kw = e.target.value; renderPartyRows(col); });
+      (hasAny ? '<div class="row wrap" style="margin-bottom:12px"><div class="search"><span>🔍</span>' +
+        '<input id="' + (isC ? 'custKw' : 'supKw') + '" placeholder="搜索名称 / 电话 / 地址" value="' + esc(f.kw) + '"/></div></div>' : '') +
+      tableCard;
+    if (hasAny) {
+      $('#' + (isC ? 'custKw' : 'supKw')).addEventListener('input', function (e) { f.kw = e.target.value; renderPartyRows(col); });
+    }
     renderPartyRows(col);
   }
   function renderPartyRows(col) {
@@ -851,20 +892,27 @@
 
     var thr = DB.settings().lowStock;
     var prods = DB.all('products');
+    var hasProd = prods.length > 0;
+    var stockCard = hasProd
+      ? card('实时库存（<span id="invCount"></span>）', '<table class="table"><thead><tr><th>商品</th><th>分类</th><th>单位</th><th>库存</th><th>阈值</th><th class="right">操作</th></tr></thead><tbody id="invBody"></tbody></table>')
+      : emptyGuide({ ico: '🏬', title: '还没有库存', desc: '先去新增商品并进货，库存会自动汇总到这里',
+          actions: '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button>' });
 
     app.innerHTML =
       '<div class="view-head"><h2>库存管理</h2><span class="sub" id="invSub"></span></div>' +
-      '<div class="row wrap" style="margin-bottom:12px">' +
-      '<div class="search"><span>🔍</span><input id="invKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(f.kw) + '"/></div>' +
-      '<label class="row" style="gap:6px;font-size:13px;color:var(--c-muted)"><input type="checkbox" id="invLowOnly"' + (f.lowOnly ? ' checked' : '') + '/> 只看预警</label>' +
-      '</div>' +
+      (hasProd ? '<div class="row wrap" style="margin-bottom:12px">' +
+        '<div class="search"><span>🔍</span><input id="invKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(f.kw) + '"/></div>' +
+        '<label class="row" style="gap:6px;font-size:13px;color:var(--c-muted)"><input type="checkbox" id="invLowOnly"' + (f.lowOnly ? ' checked' : '') + '/> 只看预警</label>' +
+        '</div>' : '') +
       '<div class="grid grid--2">' +
-      card('实时库存（<span id="inv" style="display:none"></span><span id="invCount"></span>）', '<table class="table"><thead><tr><th>商品</th><th>分类</th><th>单位</th><th>库存</th><th>阈值</th><th class="right">操作</th></tr></thead><tbody id="invBody"></tbody></table>') +
+      stockCard +
       card('出入库流水（最近30条）', '<div style="max-height:520px;overflow:auto"><table class="table"><thead><tr><th>日期</th><th>类型</th><th>商品</th><th>数量</th><th>备注</th></tr></thead><tbody>' + logs + '</tbody></table></div>') +
       '</div>';
 
-    $('#invKw').addEventListener('input', function (e) { f.kw = e.target.value; renderInvRows(); });
-    $('#invLowOnly').addEventListener('change', function (e) { f.lowOnly = e.target.checked; renderInvRows(); });
+    if (hasProd) {
+      $('#invKw').addEventListener('input', function (e) { f.kw = e.target.value; renderInvRows(); });
+      $('#invLowOnly').addEventListener('change', function (e) { f.lowOnly = e.target.checked; renderInvRows(); });
+    }
     renderInvRows();
 
     function renderInvRows() {
@@ -1010,8 +1058,11 @@
         '<div class="field"><label>默认低库存阈值</label><input id="setLow" type="number" value="' + esc(s.lowStock) + '"/></div>' +
         '<button class="btn btn--primary" onclick="App.saveSettings()">保存设置</button>') +
       card('数据维护',
-        '<p class="muted">清空会删除本设备全部业务数据并恢复初始示例数据，操作不可撤销。</p>' +
-        '<button class="btn btn--danger mt12" onclick="App.resetData()">清空并重置数据</button>') +
+        '<p class="muted">清空会删除本设备全部业务数据。正式使用请先「导出备份」，再清空为空白账本从零开始；或随时恢复示例数据用于演示。</p>' +
+        '<div class="row wrap mt12">' +
+        '<button class="btn btn--danger" onclick="App.resetBlankConfirm()">🗑️ 清空为空白账本</button>' +
+        '<button class="btn" onclick="App.resetDemoConfirm()">↺ 恢复示例数据</button>' +
+        '</div>') +
       '</div>';
   };
   window.App.saveSettings = function () {
@@ -1020,9 +1071,23 @@
     document.getElementById('shopName').textContent = DB.settings().shopName;
     toast('设置已保存', 'ok');
   };
-  window.App.resetData = function () {
-    if (!confirm('确定清空全部数据并恢复示例？此操作不可撤销！')) return;
-    DB.reset(); toast('已重置', 'ok'); route();
+  window.App.resetData = function () { window.App.resetBlankConfirm(); };
+  window.App.resetBlankConfirm = function () {
+    openModal('清空为空白账本',
+      '<p>此操作将删除本机全部业务数据，恢复为空白账本（可重新建商品、进货、开单）。</p>' +
+      '<label class="row" style="gap:8px;margin-top:10px"><input type="checkbox" id="rbExported"/> 我已导出备份（数据管理 → 导出备份）</label>',
+      '<button class="btn" onclick="App.closeModal()">取消</button>' +
+      '<button class="btn btn--danger" id="rbGo" disabled onclick="App.doResetBlank()">确认清空</button>');
+    var cb = $('#rbExported');
+    var go = $('#rbGo');
+    if (cb && go) cb.addEventListener('change', function () { go.disabled = !cb.checked; });
+  };
+  window.App.doResetBlank = function () {
+    DB.reset('blank'); closeModal(); toast('已清空为空白账本', 'ok'); route();
+  };
+  window.App.resetDemoConfirm = function () {
+    if (!confirm('确定恢复示例数据？当前数据将被覆盖。')) return;
+    DB.reset('demo'); toast('已恢复示例数据', 'ok'); route();
   };
 
   /* ---------- 数据管理 ---------- */
@@ -1030,6 +1095,14 @@
     document.getElementById('viewTitle').textContent = '数据管理';
     var s = DB.settings();
     var counts = ['products', 'customers', 'suppliers', 'sales', 'purchases', 'stockLogs', 'finance'].map(function (c) { return c + '：' + DB.all(c).length; }).join('　|　');
+    var info = DB.storageInfo();
+    var pct = info.percent;
+    var fillCls = pct >= 95 ? 'usage__fill--danger' : (pct >= 80 ? 'usage__fill--warn' : '');
+    var snaps = DB.snapshots();
+    var snapRows = snaps.length ? snaps.map(function (sn) {
+      return '<div class="row between" style="padding:6px 0"><span class="muted">快照 ' + sn.index + '（' + (sn.size / 1024).toFixed(1) + ' KB）</span>' +
+        '<button class="btn btn--sm" onclick="App.restoreSnapshot(' + sn.index + ')">恢复</button></div>';
+    }).join('') : '<div class="empty">暂无快照</div>';
     app.innerHTML =
       '<div class="grid grid--2">' +
       card('备份与恢复',
@@ -1042,8 +1115,20 @@
       card('存储信息',
         '<div class="settle-line"><span>店铺</span><span class="v">' + esc(s.shopName) + '</span></div>' +
         '<div class="settle-line total"><span>数据量</span><span class="v" style="font-size:13px">' + counts + '</span></div>' +
-        '<p class="muted mt12">部署到 GitHub Pages 后，手机浏览器打开同一网址即可使用（各设备数据独立）。</p>') +
-      '</div>';
+        '<div class="usage"><div class="row between" style="margin-top:10px"><span class="muted">本地存储占用</span><span class="mono">' + (info.used / 1024).toFixed(1) + ' KB / 约 ' + (info.limit / 1024 / 1024).toFixed(0) + ' MB（' + pct.toFixed(1) + '%）</span></div>' +
+        '<div class="usage__bar"><div class="usage__fill ' + fillCls + '" style="width:' + Math.min(100, pct) + '%"></div></div></div>' +
+        '<p class="muted mt12">数据仅保存在当前浏览器，各设备独立。更换设备请用「导出备份」迁移。</p>') +
+      '</div>' +
+      '<div class="mt16">' + card('本地快照（自动）',
+        '<p class="muted">每隔一段时间自动保存一份账本快照，误删/误导入后可从此处恢复（环形保留 3 份）。</p>' +
+        '<div class="row wrap mt12"><button class="btn btn--sm" onclick="App.snapshotNow()">📸 立即快照</button></div>' +
+        '<div class="mt12">' + snapRows + '</div>') + '</div>';
+  };
+  window.App.snapshotNow = function () { DB.snapshotNow(); toast('已创建快照', 'ok'); route(); };
+  window.App.restoreSnapshot = function (i) {
+    if (!confirm('恢复快照将覆盖当前数据，确定继续？')) return;
+    try { DB.restoreSnapshot(i); toast('已从快照 ' + i + ' 恢复', 'ok'); route(); }
+    catch (e) { toast('恢复失败：' + e.message, 'err'); }
   };
   window.App.exportData = function () {
     var json = DB.exportData();
@@ -1105,10 +1190,46 @@
     if (document.getElementById('modalMask').classList.contains('show')) closeModal();
   });
 
+  /* ---------------- 存储位置徽标 + 首次引导（GAP-05） ---------------- */
+  function fillOriginBadge() {
+    var el = document.getElementById('originBadge');
+    if (!el) return;
+    var isFile = location.protocol === 'file:';
+    var label = isFile ? '本机文件(file://)' : (location.origin || '');
+    el.textContent = '📍 ' + label;
+    el.title = isFile ? '数据存于本机文件：换用局域网地址 / 手机打开会看到另一份独立数据' : '数据存于 ' + label + '：换用其它方式打开会看到另一份独立数据';
+    el.classList.toggle('origin-badge--file', isFile);
+  }
+  function initRunState() {
+    fillOriginBadge();
+    if (!DB.settings().firstRunDone) {
+      var el = document.getElementById('firstRunHint');
+      var msg = document.getElementById('firstRunHintMsg');
+      if (el && msg) {
+        msg.textContent = '这是一个新的数据存储位置。如需迁移旧账本，请到「数据管理」用「导入备份」恢复；注意：双击文件 / 局域网地址 / 手机 是三个互相独立的数据，互不相通。';
+        el.classList.add('show');
+      }
+      DB.saveSettings({ firstRunDone: true });
+    }
+  }
+  window.App.dismissFirstRun = function () {
+    var el = document.getElementById('firstRunHint');
+    if (el) el.classList.remove('show');
+  };
+
+  /* ---------------- 空态引导（S3-04） ---------------- */
+  function emptyGuide(opts) {
+    return '<div class="empty-guide"><div class="empty-guide__ico">' + (opts.ico || '📭') + '</div>' +
+      '<div class="empty-guide__title">' + esc(opts.title) + '</div>' +
+      '<div class="empty-guide__desc">' + esc(opts.desc) + '</div>' +
+      (opts.actions || '') + '</div>';
+  }
+
   /* ---------------- 启动 ---------------- */
   // 先注册持久化失败回调，确保首次 init/seed 的写入失败也能被用户看到（BUG-05）
   DB.onPersistError(function (msg) { showPersistBanner(msg); });
   DB.init();
+  initRunState();
   var s0 = DB.settings();
   document.getElementById('brandName').textContent = s0.shopName;
   document.getElementById('shopName').textContent = s0.shopName;

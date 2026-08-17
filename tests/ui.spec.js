@@ -469,6 +469,81 @@ function run() {
     (appSrc.match(/var custOpts/g) || []).length);
   check('CSS 声明图表高度自适应', /\.chart\s*\{[^}]*height\s*:\s*auto/.test(helpers.read('assets/style.css')));
   check('报表页渲染无 JS 错误', f6.errors.length === 0, f6.errors.join(' | '));
+
+  /* ========================================================
+     C 投产可用性（Sprint 3 · GAP-03 / GAP-05 / 护栏 / 空态）
+     ======================================================== */
+  section('C1 空白账本模式（GAP-03）');
+  var c1 = boot();
+  c1.DB.reset('blank');
+  check('空白账本：商品清空', c1.DB.all('products').length === 0, c1.DB.all('products').length);
+  check('空白账本：客户清空', c1.DB.all('customers').length === 0);
+  check('空白账本：销售单清空', c1.DB.all('sales').length === 0);
+  c1.go('dashboard');
+  check('空白账本工作台无 JS 错误', c1.errors.length === 0, c1.errors.join(' | '));
+  check('空白账本工作台营收为 0', c1.$('#view').textContent.indexOf('¥0.00') >= 0);
+
+  section('C2 空白账本可走通全链路');
+  var c2 = boot();
+  c2.DB.reset('blank');
+  c2.DB.insert('products', { name: '测试机', brand: 'B', model: 'M1', type: 'T', category: 'C', unit: '台', priceWholesale: 100, priceRetail: 120, stock: 10, lowStock: 5 });
+  var c2p = c2.DB.all('products')[0];
+  c2.DB.recordPurchase({ supplierId: null, supplierName: '其他供应商', items: [{ productId: c2p.id, qty: 5, price: 80 }], paid: 0, method: '欠款' });
+  var c2sale = c2.DB.recordSale({ customerId: null, customerName: '散客', items: [{ productId: c2p.id, qty: 2, price: 100 }], paid: 200, method: '现金' });
+  check('空白账本可开单', !!c2sale && c2.DB.all('sales').length === 1, c2.DB.all('sales').length);
+  check('开单后库存 = 10+5-2 = 13', c2.DB.get('products', c2p.id).stock === 13, c2.DB.get('products', c2p.id).stock);
+
+  section('C3 恢复示例数据');
+  var c3 = boot();
+  c3.DB.reset('blank');
+  c3.DB.reset('demo');
+  check('恢复示例：商品回到 8', c3.DB.all('products').length === 8, c3.DB.all('products').length);
+  check('恢复示例：客户回到 3', c3.DB.all('customers').length === 3);
+
+  section('C4 设置页提供双模式按钮');
+  var c4 = boot({ hash: '#settings' });
+  check('设置页有「清空为空白账本」按钮', c4.$('#view').textContent.indexOf('清空为空白账本') >= 0);
+  check('设置页有「恢复示例数据」按钮', c4.$('#view').textContent.indexOf('恢复示例数据') >= 0);
+
+  section('G1 存储位置徽标（GAP-05）');
+  var g1 = boot();
+  check('默认 https origin 徽标显示域名', !!g1.$('#originBadge') && /local\.test/.test(g1.text('#originBadge')), g1.$('#originBadge') ? g1.text('#originBadge') : 'no #originBadge');
+  var g1b = boot({ url: 'file:///Users/me/SaleSystem/index.html' });
+  check('file:// 徽标显示「本机文件」', !!g1b.$('#originBadge') && /本机文件/.test(g1b.text('#originBadge')), g1b.$('#originBadge') ? g1b.text('#originBadge') : 'no #originBadge');
+
+  section('G2 首次打开引导（GAP-05）');
+  var g2 = boot();
+  check('首屏出现 origin 隔离引导提示', !!g2.$('#firstRunHint') && g2.$('#firstRunHint').classList.contains('show'), g2.$('#firstRunHint') ? 'hidden' : 'no el');
+
+  section('G3 README 首屏警告');
+  var readme = helpers.read('README.md');
+  check('README 含「只用一种方式打开」', /只用一种方式打开/.test(readme));
+
+  section('G4 滚动快照 + 导出提醒 + 用量（S3-03）');
+  var g4 = boot();
+  g4.DB.snapshotNow();
+  check('快照已创建', g4.DB.snapshots().length >= 1, g4.DB.snapshots().length);
+  var snap = g4.DB.snapshots()[0];
+  var before = g4.DB.all('products').length;
+  g4.DB.insert('products', { name: '快照后新增', stock: 1, unit: '台', priceWholesale: 1, priceRetail: 1 });
+  g4.DB.restoreSnapshot(snap.index);
+  check('从快照恢复后商品数回到快照时点', g4.DB.all('products').length === before, g4.DB.all('products').length + ' vs ' + before);
+  g4.DB.saveSettings({ lastExportAt: g4.DB.todayStr(new Date(Date.now() - 10 * 86400000)) });
+  g4.go('dashboard');
+  check('超 7 天未导出出现提醒黄条', !!g4.$('#exportReminder') && g4.$('#exportReminder').classList.contains('show'));
+  g4.DB.exportData();
+  g4.go('dashboard');
+  check('刚导出后不显示提醒', !g4.$('#exportReminder') || !g4.$('#exportReminder').classList.contains('show'));
+  var info = g4.DB.storageInfo();
+  check('storageInfo 返回占用/上限', info && typeof info.used === 'number' && typeof info.limit === 'number');
+
+  section('G5 空白账本空态引导（S3-04）');
+  var g5 = boot();
+  g5.DB.reset('blank');
+  g5.go('dashboard');
+  check('空白工作台给出引导', /还没有数据|新增商品/.test(g5.$('#view').textContent), g5.$('#view').textContent.slice(0, 120));
+  g5.go('products');
+  check('空白商品页引导新增', /新增第一个商品|新增商品/.test(g5.$('#view').textContent), g5.$('#view').textContent.slice(0, 120));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */

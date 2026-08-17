@@ -22,6 +22,7 @@
         <h1 id="viewTitle">工作台</h1>
         <div class="spacer"></div>
         <span class="shop hide-mobile" id="shopName">家电批发中心</span>
+        <span class="origin-badge hide-mobile" id="originBadge" title="数据存放位置"></span>
         <button class="btn btn--sm" onclick="location.hash='#data'">💾 备份</button>
       </header>
       <main class="content" id="view"></main>
@@ -54,6 +55,13 @@
     <span class="persist-banner__msg" id="persistBannerMsg">本地存储写入失败，最近的改动可能未保存。请立即导出备份。</span>
     <button class="btn btn--sm" onclick="App.exportData()">立即导出备份</button>
     <button class="btn btn--sm btn--ghost" onclick="App.retryPersist()">重试保存</button>
+  </div>
+
+  <!-- 首次打开引导（GAP-05）：提示 origin 隔离与导入备份，仅全新存储位置出现一次 -->
+  <div class="firstrun-hint" id="firstRunHint" role="alert">
+    <span class="firstrun-hint__ico">💡</span>
+    <span class="firstrun-hint__msg" id="firstRunHintMsg"></span>
+    <button class="btn btn--sm" onclick="App.dismissFirstRun()">知道了</button>
   </div>
 
   <div class="toast-wrap" id="toastWrap"></div>

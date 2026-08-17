@@ -9,14 +9,21 @@
 
   var KEY = 'sale_erp_v1_state';
   var SCHEMA = 1;
-  var STORE = (typeof localStorage !== 'undefined') ? localStorage : (root.__ls || (root.__ls = makeShim()));
+  /* localStorage 在隐私模式 / 部分 file:// 环境（如 jsdom 的 opaque origin）下访问会抛 SecurityError，
+     此时退化为内存 shim，保证应用不崩溃（真实浏览器 file:// 仍可正常读写 localStorage）。 */
+  var STORE;
+  try {
+    STORE = localStorage;
+    if (!STORE || typeof STORE.getItem !== 'function') STORE = null;
+  } catch (e) { STORE = null; }
+  if (!STORE) STORE = root.__ls || (root.__ls = makeShim());
 
   /* 业务集合清单：导入补齐、载入自愈都以此为准 */
   var COLLECTIONS = ['products', 'customers', 'suppliers', 'sales', 'purchases', 'stockLogs', 'finance'];
   /* 虚拟往来主体：无客户的销售单归「散客」，无供应商的进货单归「其他供应商」 */
   var WALKIN_ID = '__walkin__';
   var NOSUP_ID = '__nosupplier__';
-  var DEFAULT_SETTINGS = { shopName: '家电批发中心', lowStock: 10, currency: '¥' };
+  var DEFAULT_SETTINGS = { shopName: '家电批发中心', lowStock: 10, currency: '¥', lastExportAt: '', firstRunDone: false, snapSeq: 0 };
   /* localStorage 通用上限约 5MB（各浏览器略有差异，仅用于占用比例展示） */
   var STORE_LIMIT = 5 * 1024 * 1024;
 
@@ -517,6 +524,7 @@
   /* ---------------- 备份 / 恢复（S1-05 BUG-04） ---------------- */
   function exportData() {
     ensure();
+    state.settings.lastExportAt = todayStr();   // 记录导出时间，供「N 天未备份」提醒（S3-03）
     var out = assign({}, state);
     out.__meta = assign({}, state.__meta || {}, {
       schema: SCHEMA, app: 'sale-erp', exportedAt: new Date().toISOString()
@@ -555,7 +563,51 @@
     };
   }
 
-  function reset() { try { STORE.removeItem(KEY); } catch (e) { /* ignore */ } state = null; seed(); normalize(); }
+  /* 清空数据：mode='blank' 清空为空白账本（正式使用）/ 其他=恢复示例数据（GAP-03） */
+  function reset(mode) {
+    try { STORE.removeItem(KEY); } catch (e) { /* ignore */ }
+    state = null;
+    if (mode === 'blank') {
+      state = {
+        settings: assign({}, DEFAULT_SETTINGS, { shopName: '我的家电店', firstRunDone: true }),
+        products: [], customers: [], suppliers: [], sales: [], purchases: [], stockLogs: [], finance: [],
+        __meta: { schema: SCHEMA, blank: true }
+      };
+      normalize();
+      persist();
+    } else {
+      seed();
+      normalize();
+    }
+  }
+
+  /* 滚动快照（S3-03）：环形 3 份，防误删/误导入导致整个账本丢失 */
+  var SNAP_KEYS = ['sale_erp_v1_snap_1', 'sale_erp_v1_snap_2', 'sale_erp_v1_snap_3'];
+  function snapshotNow() {
+    ensure();
+    var seq = (state.settings.snapSeq || 0) + 1;
+    var idx = (seq - 1) % SNAP_KEYS.length;
+    state.settings.snapSeq = seq;
+    var payload = JSON.stringify(state);
+    try { STORE.setItem(SNAP_KEYS[idx], payload); } catch (e) { /* 快照写入失败不影响主流程 */ }
+    persist();
+    return idx + 1;                 // 对外 1-based
+  }
+  function snapshots() {
+    return SNAP_KEYS.map(function (k, i) {
+      var raw = STORE.getItem(k);
+      if (!raw) return null;
+      return { index: i + 1, key: k, size: raw.length };
+    }).filter(Boolean);
+  }
+  function restoreSnapshot(i) {
+    var raw = STORE.getItem(SNAP_KEYS[(i | 0) - 1]);
+    if (!raw) throw new Error('快照不存在');
+    state = JSON.parse(raw);
+    normalize();
+    persist();
+    return { ok: true, counts: COLLECTIONS.map(function (c) { return c + ':' + state[c].length; }) };
+  }
 
   root.DB = {
     init: ensure, all: all, get: get, insert: insert, update: update, remove: remove,
@@ -565,6 +617,7 @@
     topProducts: topProducts, receivables: receivables, payables: payables,
     settings: settings, saveSettings: saveSettings,
     exportData: exportData, importData: importData, reset: reset,
+    snapshotNow: snapshotNow, snapshots: snapshots, restoreSnapshot: restoreSnapshot,
     uid: uid, todayStr: todayStr, round2: round2, isPaidOff: isPaidOff,
     onPersistError: function (fn) { onPersistError = fn; },
     persistOk: persistOk, storageInfo: storageInfo,

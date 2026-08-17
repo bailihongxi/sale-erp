@@ -46,7 +46,7 @@ function boot(opts) {
 
   var errors = [];
   var dom = new JSDOM(html, {
-    url: 'https://local.test/' + (opts.hash || ''),
+    url: opts.url || ('https://local.test/' + (opts.hash || '')),
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     virtualConsole: makeConsole(errors)
