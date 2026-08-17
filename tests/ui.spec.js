@@ -544,6 +544,55 @@ function run() {
   check('空白工作台给出引导', /还没有数据|新增商品/.test(g5.$('#view').textContent), g5.$('#view').textContent.slice(0, 120));
   g5.go('products');
   check('空白商品页引导新增', /新增第一个商品|新增商品/.test(g5.$('#view').textContent), g5.$('#view').textContent.slice(0, 120));
+
+  /* ========================================================
+     M 手机端就绪度（S4-02）
+     ======================================================== */
+  section('M1 视口与移动端标记');
+  var idxHtml = helpers.read('index.html');
+  check('index.html 含 viewport（width=device-width）', /name="viewport"[^>]*width=device-width/.test(idxHtml));
+  check('index.html 含 viewport-fit=cover（刘海屏安全区）', /viewport-fit=cover/.test(idxHtml));
+
+  section('M2 手机底部导航与"我的"菜单');
+  var m = boot();
+  check('底部导航渲染 4 项', m.$$('#bottomNav .nav__item').length === 4, m.$$('#bottomNav .nav__item').length);
+  check('Sheet 菜单含全部 ' + NAV_COUNT + ' 个模块', m.$$('#sheetNav .nav__item').length === NAV_COUNT, m.$$('#sheetNav .nav__item').length);
+  var moreBtn = m.$('#bottomNav [data-id="more"]');
+  m.click(moreBtn);
+  check('点"我的"弹出底部菜单 Sheet', m.$('#sheetMask').classList.contains('show'));
+  var sheetItem = m.$('#sheetNav [data-id="products"]');
+  m.click(sheetItem);
+  check('Sheet 中点模块后自动收起（BUG-06 回归）', !m.$('#sheetMask').classList.contains('show'));
+
+  section('M3 路由切换强制收起 Sheet（BUG-06 兜底）');
+  var m3 = boot();
+  m3.App.openSheet();
+  check('openSheet 后 Sheet 显示', m3.$('#sheetMask').classList.contains('show'));
+  m3.window.location.hash = '#inventory';
+  m3.App.routeSync();
+  check('路由切换后 Sheet 被强制收起', !m3.$('#sheetMask').classList.contains('show'));
+
+  section('M4 响应式断点与表格横向滚动');
+  var css = helpers.read('assets/style.css');
+  check('style.css 含 ≤768px 媒体查询', /@media\s*\(max-width:\s*768px\)/.test(css));
+  check('style.css 含 ≤1100px 媒体查询（平板过渡）', /@media\s*\(max-width:\s*1100px\)/.test(css));
+  var block768 = css.split('@media (max-width:768px)').slice(1).map(function (p) { return p.split('@media').shift(); }).join('\n');
+  check('手机端 .table 可横向滚动（overflow-x:auto）',
+    /\.table\s*\{[^}]*overflow-x:\s*auto/.test(block768) || /\.table\s*\{[^}]*display:\s*block/.test(block768),
+    '需为 .table 增加 overflow-x:auto');
+  check('手机端禁用页面横向溢出（overflow-x:hidden）',
+    /body\s*\{[^}]*overflow-x:\s*hidden/.test(block768),
+    '需加 body{overflow-x:hidden}');
+  // 清单项3：工作台 KPI 单列；清单项5：开单页单列堆叠
+  check('手机端 KPI 单列排布（.grid--kpi→1fr）',
+    /@media[\s\S]*max-width:\s*768px[\s\S]*?\.grid--kpi[^{]*\s*\{[^}]*grid-template-columns:\s*1fr/.test(css));
+  check('手机/平板端开单页单列堆叠（.pos→1fr）',
+    /@media[\s\S]*max-width:\s*1100px[\s\S]*?\.pos\s*\{[^}]*grid-template-columns:\s*1fr/.test(css));
+
+  section('M5 桌面专属信息在手机端隐藏');
+  check('origin 徽标带 hide-mobile', /class="origin-badge hide-mobile"/.test(idxHtml));
+  check('店铺名带 hide-mobile', /class="shop hide-mobile"/.test(idxHtml));
+  check('style.css 定义 .hide-mobile 隐藏', /\.hide-mobile\s*\{\s*display:\s*none!important/.test(css));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */
