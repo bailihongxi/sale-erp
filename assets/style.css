@@ -222,6 +222,7 @@ a{color:inherit;text-decoration:none}
 
 .cart{position:sticky;top:calc(var(--topbar-h) + 16px)}
 .cart-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--c-border)}
+.prod-cards{display:none}
 .cart-item .nm{flex:1;font-size:13px}
 .qty{display:inline-flex;align-items:center;border:1px solid var(--c-border);border-radius:var(--r-sm);overflow:hidden}
 .qty button{width:26px;height:26px;border:none;background:var(--c-bg);font-size:15px}
@@ -313,6 +314,15 @@ a{color:inherit;text-decoration:none}
   /* 手机端：禁止页面横向溢出；宽表格改为可横向滚动，不撑破布局（S4-02 清单项4） */
   body{overflow-x:hidden}
   .table{display:block;width:max-content;min-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* 商品管理：手机端用卡片替代表格（I5） */
+  .prod-table{display:none}
+  .prod-cards{display:block}
+  .product-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
+  .product-card__title{font-size:16px;font-weight:700;margin-bottom:8px}
+  .product-card__row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px}
+  .product-card__row .danger{color:var(--c-danger)}
+  .product-card__actions{display:flex;gap:8px;margin-top:10px}
 }
 
 /* 更多菜单(手机) */

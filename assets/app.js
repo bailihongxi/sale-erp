@@ -261,9 +261,10 @@
 
     var hasProd = list.length > 0;
     var bodyBlock = hasProd
-      ? '<div class="card"><table class="table"><thead><tr>' +
+      ? '<div class="card prod-table"><table class="table"><thead><tr>' +
         '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>分类</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
-        '</tr></thead><tbody id="prodBody">' + rows + '</tbody></table></div>'
+        '</tr></thead><tbody id="prodBody"></tbody></table></div>' +
+        '<div class="prod-cards" id="prodCards"></div>'
       : emptyGuide({ ico: '📦', title: '还没有商品', desc: '新增第一个商品，开始管理你的库存',
           actions: '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增第一个商品</button>' });
 
@@ -283,17 +284,45 @@
         c.addEventListener('click', function () { filter.cat = c.getAttribute('data-cat'); renderProdRows(); });
       });
     }
+    renderProdRows();
     function renderProdRows() {
-      var body = $('#prodBody');
-      if (!body) return;
-      body.innerHTML = list.filter(function (p) {
+      var filtered = list.filter(function (p) {
         if (filter.cat !== '全部' && p.category !== filter.cat) return false;
         if (filter.kw && (p.name + p.brand + p.model + p.type).toLowerCase().indexOf(filter.kw.toLowerCase()) < 0) return false;
         return true;
-      }).map(function (p) {
-        var low = p.stock <= (p.lowStock || DB.settings().lowStock);
-        return '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.category) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
-      }).join('') || '<tr><td colspan="10" class="empty">没有匹配的商品</td></tr>';
+      });
+      var body = $('#prodBody');
+      if (body) {
+        body.innerHTML = filtered.map(function (p) {
+          var low = p.stock <= (p.lowStock || DB.settings().lowStock);
+          return '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.category) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
+        }).join('') || '<tr><td colspan="10" class="empty">没有匹配的商品</td></tr>';
+      }
+      var cards = $('#prodCards');
+      if (cards) {
+        cards.innerHTML = filtered.map(function (p) {
+          var low = p.stock <= (p.lowStock || DB.settings().lowStock);
+          return '<div class="product-card" data-id="' + p.id + '">' +
+            '<div class="product-card__title">' + esc(p.name) + '</div>' +
+            '<div class="product-card__row">' +
+              '<span class="muted">' + esc(p.brand || '') + '</span>' +
+              '<span class="muted">' + esc(p.category || '') + '</span>' +
+            '</div>' +
+            '<div class="product-card__row">' +
+              '<span>进货价：' + money(p.priceWholesale) + '</span>' +
+              '<span>售价：' + money(p.priceRetail) + '</span>' +
+            '</div>' +
+            '<div class="product-card__row">' +
+              '<span>库存：' + (low ? '<b class="danger">' + p.stock + '</b>' : p.stock) + ' ' + esc(p.unit) + '</span>' +
+              (low ? '<span class="tag tag--danger">低库存</span>' : '') +
+            '</div>' +
+            '<div class="product-card__actions">' +
+              '<button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button>' +
+              '<button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button>' +
+            '</div>' +
+          '</div>';
+        }).join('') || '<div class="empty">没有匹配的商品</div>';
+      }
     }
   };
 
