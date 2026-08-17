@@ -629,43 +629,59 @@ async function run() {
   check('批量导入全程无 JS 错误', i1.errors.length + i1b.errors.length + i1c.errors.length === 0,
     [i1.errors, i1b.errors, i1c.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
-  section('I1b 批量导入模板按钮（填入 + 下载）');
+  section('I1b 批量导入选择CSV文件 + 下载模板');
   var i1t = boot({ hash: '#products' });
   i1t.App.openBatchImport();
-  check('导入弹窗含「填入模板示例」按钮', /填入模板示例/.test(i1t.$('#modalBody').textContent));
+  check('导入弹窗含「选择CSV文件」按钮', /选择CSV文件/.test(i1t.$('#modalBody').textContent));
   check('导入弹窗含「下载 CSV 模板」按钮', /下载 CSV 模板/.test(i1t.$('#modalBody').textContent));
-  check('App.fillCsvTemplate 函数存在', typeof i1t.App.fillCsvTemplate === 'function');
-  check('App.downloadCsvTemplate 函数存在', typeof i1t.App.downloadCsvTemplate === 'function');
-  // 填入模板：文本框初始为空，调用后有内容
-  check('填入前文本框为空', i1t.$('#batchArea').value === '');
-  i1t.App.fillCsvTemplate();
-  var filled = i1t.$('#batchArea').value;
-  check('填入后文本框含表头行', filled.indexOf('商品名称,品牌,型号') >= 0, filled.slice(0, 80));
-  check('填入后文本框含示例数据行', filled.indexOf('示例-美的空调') >= 0 && filled.indexOf('示例-九阳豆浆机') >= 0);
-  check('填入后内容可被 doBatchImport 正常解析（含2个示例商品）', (function () {
+  check('弹窗含隐藏文件选择器 #batchFile', !!i1t.$('#batchFile') && i1t.$('#batchFile').type === 'file');
+  check('文件选择器接受 .csv', i1t.$('#batchFile').accept.indexOf('.csv') >= 0);
+  check('App.chooseCsvFile 函数存在', typeof i1t.App.chooseCsvFile === 'function');
+  check('App.loadCsvFile 函数存在', typeof i1t.App.loadCsvFile === 'function');
+  // chooseCsvFile 触发隐藏 input 的 click
+  var fileInput = i1t.$('#batchFile');
+  var clicked = false;
+  fileInput.click = function () { clicked = true; };
+  i1t.App.chooseCsvFile();
+  check('chooseCsvFile 触发了文件选择器点击', clicked);
+  // loadCsvFile：模拟 FileReader 同步读取文件内容并填入文本框
+  var csvContent = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存\n测试文件商品,品牌X,型号X,类型X,分类X,台,50,80,5,15\n';
+  var mockFile = { name: 'test.csv', size: csvContent.length };
+  var origFileReader = i1t.window.FileReader;
+  i1t.window.FileReader = function () {
+    this.readAsText = function () {
+      // 同步触发 onload，便于测试断言
+      this.onload({ target: { result: csvContent } });
+    };
+    this.onerror = null;
+  };
+  i1t.App.loadCsvFile({ files: [mockFile], value: 'test.csv' });
+  check('loadCsvFile 将文件内容填入文本框', i1t.$('#batchArea').value === csvContent,
+    i1t.$('#batchArea').value.slice(0, 80));
+  check('载入后内容可被 doBatchImport 正常解析（1个商品）', (function () {
     var before = i1t.DB.all('products').length;
     i1t.App.doBatchImport();
-    return i1t.DB.all('products').length === before + 2;
-  })(), '导入后商品数=' + i1t.DB.all('products').length);
-  // 下载模板：jsdom 中 Blob 可能未实现，做兼容打桩，仅验证不报错
-  var origBlob2 = i1t.window.Blob;
-  if (typeof origBlob2 !== 'function') {
-    i1t.window.Blob = function (parts, opts) { this.parts = parts; this.opts = opts; };
+    return i1t.DB.all('products').length === before + 1;
+  })());
+  i1t.window.FileReader = origFileReader;
+  // 下载模板：jsdom 兼容打桩
+  if (typeof i1t.window.Blob !== 'function') {
+    i1t.window.Blob = function (parts, opts) { this.parts = parts; };
   }
   var dlClicked = false;
-  var origCreate2 = i1t.window.URL.createObjectURL;
-  i1t.window.URL.createObjectURL = function () { return 'blob:template-test'; };
-  var origCreateEl2 = i1t.document.createElement.bind(i1t.document);
+  var origCreate = i1t.window.URL.createObjectURL;
+  i1t.window.URL.createObjectURL = function () { return 'blob:test'; };
+  var origCreateEl = i1t.document.createElement.bind(i1t.document);
   i1t.document.createElement = function (tag) {
-    var el = origCreateEl2(tag);
+    var el = origCreateEl(tag);
     if (tag === 'a') { el.click = function () { dlClicked = true; }; }
     return el;
   };
   i1t.App.downloadCsvTemplate();
   check('下载模板触发了点击', dlClicked);
-  i1t.document.createElement = origCreateEl2;
-  i1t.window.URL.createObjectURL = origCreate2;
-  check('模板功能全程无 JS 错误', i1t.errors.length === 0, i1t.errors.join(' | '));
+  i1t.document.createElement = origCreateEl;
+  i1t.window.URL.createObjectURL = origCreate;
+  check('CSV文件导入功能全程无 JS 错误', i1t.errors.length === 0, i1t.errors.join(' | '));
 
   section('I2 销售开单结算与搜索位置互换');
   var i2 = boot({ hash: '#pos' });

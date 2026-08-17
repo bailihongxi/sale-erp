@@ -375,9 +375,10 @@
     var sample = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存\n美的空调 KFR-35GW,美的,KFR-35GW,空调,空调,台,1899,2299,10,20\n九阳豆浆机 JYDZ,九阳,JYDZ,小家电,厨电,台,199,299,5,30';
     var body =
       '<div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn--sm" onclick="App.fillCsvTemplate()">📋 填入模板示例</button>' +
+      '<button class="btn btn--sm" onclick="App.chooseCsvFile()">📂 选择CSV文件</button>' +
       '<button class="btn btn--sm" onclick="App.downloadCsvTemplate()">📄 下载 CSV 模板</button>' +
-      '<span class="muted" style="font-size:12px;align-self:center">填入示例可直接参考格式修改，下载模板可离线编辑后粘贴</span>' +
+      '<input type="file" id="batchFile" accept=".csv,.txt" style="display:none" onchange="App.loadCsvFile(this)"/>' +
+      '<span class="muted" style="font-size:12px;align-self:center">先下载模板编辑，再选择CSV文件将内容载入下方文本框</span>' +
       '</div>' +
       '<div class="field"><label>粘贴 CSV / TSV / JSON</label><textarea id="batchArea" rows="10" placeholder="' + esc(sample) + '"></textarea></div>' +
       '<div class="muted" style="font-size:12px;margin-top:6px">支持 CSV（逗号分隔，可含表头）、TSV（制表符分隔）或 JSON 数组。表头可用「商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存」或对应英文 key；无表头时按此顺序解析。</div>';
@@ -396,14 +397,34 @@
     return header + '\n' + rows.join('\n') + '\n';
   }
 
-  /** 将 CSV 模板示例填入批量导入文本框，方便用户直接参考修改 */
-  window.App.fillCsvTemplate = function () {
-    var area = $('#batchArea');
-    if (!area) return;
-    area.value = csvTemplateText();
-    area.focus();
-    area.select();
-    toast('已填入模板示例，请修改后导入', 'ok');
+  /** 点击「选择CSV文件」按钮，触发隐藏的文件选择器 */
+  window.App.chooseCsvFile = function () {
+    var input = $('#batchFile');
+    if (input) input.click();
+  };
+
+  /** 读取用户选择的CSV文件，将内容载入批量导入文本框 */
+  window.App.loadCsvFile = function (input) {
+    var file = input && input.files && input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var text = e.target.result;
+      // 去除 UTF-8 BOM，避免首列表头解析异常
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      var area = $('#batchArea');
+      if (area) {
+        area.value = text;
+        area.focus();
+      }
+      toast('已载入文件：' + file.name, 'ok');
+    };
+    reader.onerror = function () {
+      toast('文件读取失败', 'err');
+    };
+    reader.readAsText(file, 'UTF-8');
+    // 允许重复选择同一文件
+    input.value = '';
   };
 
   /** 下载商品批量导入 CSV 模板（含表头 + 2 行示例，带 BOM 防 Excel 乱码） */
