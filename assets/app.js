@@ -796,18 +796,46 @@
   };
   function renderPuRows() {
     var box = $('#puRows'); if (!box) return;
-    var opts = uiState.prodOpts || DB.all('products').map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('');
+    var allProds = DB.all('products');
     box.innerHTML = (uiState.puRows || []).map(function (r, i) {
       return '<div class="row" style="gap:6px;margin-bottom:6px" data-i="' + i + '">' +
-        '<select class="pu-pid" style="flex:2">' + opts.replace('value="' + r.pid + '"', 'value="' + r.pid + '" selected') + '</select>' +
+        '<div style="flex:2;min-width:0">' +
+        '<input class="pu-kw" placeholder="搜索名称/品牌/型号" style="width:100%;margin-bottom:4px"/>' +
+        '<select class="pu-pid" style="width:100%"><option value="">选择商品</option></select>' +
+        '</div>' +
         '<input class="pu-qty" type="number" value="' + r.qty + '" style="width:60px" placeholder="数量"/>' +
         '<input class="pu-price" type="number" value="' + r.price + '" style="width:80px" placeholder="单价"/>' +
         '<button class="btn btn--sm btn--danger" onclick="App.delPuRow(' + i + ')">✕</button></div>';
     }).join('');
     Array.prototype.forEach.call(box.children, function (row, i) {
-      row.querySelector('.pu-pid').addEventListener('change', function (e) { uiState.puRows[i].pid = e.target.value; });
+      var sel = row.querySelector('.pu-pid');
+      var kwIn = row.querySelector('.pu-kw');
+      var priceIn = row.querySelector('.pu-price');
+      function buildOptions(kw) {
+        var pid = uiState.puRows[i].pid;
+        var html = allProds.filter(function (p) {
+          if (!kw) return true;
+          if (p.id === pid) return true;
+          var t = (p.name + ' ' + p.brand + ' ' + p.model + ' ' + p.type).toLowerCase();
+          return t.indexOf(kw.toLowerCase()) >= 0;
+        }).map(function (p) {
+          return '<option value="' + p.id + '"' + (p.id === pid ? ' selected' : '') + '>' + esc(p.name + ' (' + p.brand + ')') + '</option>';
+        }).join('');
+        sel.innerHTML = html || '<option value="">无匹配商品</option>';
+      }
+      buildOptions('');
+      kwIn.addEventListener('input', function (e) { buildOptions(e.target.value); });
+      sel.addEventListener('change', function (e) {
+        uiState.puRows[i].pid = e.target.value;
+        var p = DB.get('products', e.target.value);
+        if (p && priceIn && (!parseFloat(priceIn.value) || parseFloat(priceIn.value) === 0)) {
+          priceIn.value = p.priceWholesale;
+          uiState.puRows[i].price = p.priceWholesale;
+        }
+        updatePuSum();
+      });
       row.querySelector('.pu-qty').addEventListener('input', function (e) { uiState.puRows[i].qty = parseInt(e.target.value) || 0; updatePuSum(); });
-      row.querySelector('.pu-price').addEventListener('input', function (e) { uiState.puRows[i].price = parseFloat(e.target.value) || 0; updatePuSum(); });
+      priceIn.addEventListener('input', function (e) { uiState.puRows[i].price = parseFloat(e.target.value) || 0; updatePuSum(); });
     });
     updatePuSum();
   }

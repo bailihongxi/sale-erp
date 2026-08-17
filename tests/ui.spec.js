@@ -641,6 +641,25 @@ function run() {
   check('桌面端 .pos 列宽先结算区 380px，后商品区 1fr',
     /\.pos\s*\{[^}]*grid-template-columns:\s*380px[^1-9]*1fr/.test(i2css),
     i2css.match(/\.pos\s*\{[^}]*\}/));
+
+  section('I3 新建进货单商品搜索');
+  var i3 = boot({ hash: '#purchase' });
+  i3.App.openPurchaseForm();
+  check('进货单弹窗有商品搜索框', !!i3.$('#puRows .pu-kw'));
+  var before = i3.$$('#puRows .pu-pid option').length;
+  var kw = i3.$('#puRows .pu-kw');
+  kw.value = '海尔'; i3.fire(kw, 'input');
+  var after = i3.$$('#puRows .pu-pid option').length;
+  check('搜索后选项数量减少', after < before, 'before=' + before + ' after=' + after);
+  var i3pid = i3.DB.all('products').filter(function (p) { return p.name.indexOf('海尔') >= 0 || p.brand.indexOf('海尔') >= 0; })[0].id;
+  i3.$('#puRows .pu-pid').value = i3pid; i3.fire(i3.$('#puRows .pu-pid'), 'change');
+  i3.$('#puRows .pu-qty').value = '5'; i3.fire(i3.$('#puRows .pu-qty'), 'input');
+  i3.$('#puRows .pu-price').value = '100'; i3.fire(i3.$('#puRows .pu-price'), 'input');
+  i3.$('#puSup').value = i3.DB.all('suppliers')[0].id; i3.fire(i3.$('#puSup'), 'change');
+  var beforeN = i3.DB.all('purchases').length;
+  i3.App.savePurchase();
+  check('搜索并选择商品后可正常保存进货单', i3.DB.all('purchases').length === beforeN + 1);
+  check('进货单流程无 JS 错误', i3.errors.length === 0, i3.errors.join(' | '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */
