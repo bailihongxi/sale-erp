@@ -696,6 +696,7 @@
   window.App.closeModal = closeModal;
   window.App.openSheet = openSheet;
   window.App.closeSheet = closeSheet;
+  window.App.__route = route;   // 测试钩子：同步触发渲染（jsdom 的 hashchange 是异步的）
 
   // 绑定底部「我的」菜单
   document.getElementById('bottomNav').addEventListener('click', function (e) {
