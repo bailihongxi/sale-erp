@@ -10,6 +10,10 @@
   var navEl = document.getElementById('nav');
   var bottomNav = document.getElementById('bottomNav');
 
+  /* 界面临时状态（筛选条件 / 表单草稿 / 焦点记忆）
+     统一收在这里，不再往 window 上挂 __xxx 全局（MNR-09） */
+  var uiState = {};
+
   /* ---------------- 工具 ---------------- */
   function $(s, r) { return (r || document).querySelector(s); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
@@ -17,11 +21,48 @@
   function num(n) { return Number(n || 0).toLocaleString('zh-CN'); }
   function short(n) { n = Number(n || 0); if (n >= 10000) return (n / 10000).toFixed(1) + '万'; if (n >= 1000) return (n / 1000).toFixed(1) + 'k'; return String(Math.round(n)); }
   function today() { return DB.todayStr(); }
-  function statusTag(s) {
-    if (s === 'paid') return '<span class="tag tag--success">已结清</span>';
-    if (s === 'partial') return '<span class="tag tag--warning">部分收</span>';
-    if (s === 'unpaid') return '<span class="tag tag--danger">欠款</span>';
+  /**
+   * 单据状态标签。
+   * kind='purchase' 时用付款口径（已付清/部分付/未付），
+   * 否则用收款口径（已结清/部分收/欠款）——同一个 status 在采购单里说"已结清"会误导（MNR-06）。
+   */
+  function statusTag(s, kind) {
+    var buy = kind === 'purchase';
+    if (s === 'paid') return '<span class="tag tag--success">' + (buy ? '已付清' : '已结清') + '</span>';
+    if (s === 'partial') return '<span class="tag tag--warning">' + (buy ? '部分付' : '部分收') + '</span>';
+    if (s === 'unpaid') return '<span class="tag tag--danger">' + (buy ? '未付' : '欠款') + '</span>';
     return '<span class="tag">' + esc(s) + '</span>';
+  }
+
+  /** 下拉选项：pairs = [[value, label], ...] */
+  function opt(pairs, cur) {
+    return pairs.map(function (p) {
+      return '<option value="' + esc(p[0]) + '"' + (String(cur) === String(p[0]) ? ' selected' : '') + '>' + esc(p[1]) + '</option>';
+    }).join('');
+  }
+
+  /** 只取未停用的往来单位，用于各类下拉框（停用后不再新开单，但历史单据保留） */
+  function activeParties(col) {
+    return DB.all(col).filter(function (x) { return !x.archived; });
+  }
+
+  /** 日期是否落在筛选区间内：'all' | 'today' | 天数字符串 */
+  function inRange(dateStr, range) {
+    if (!range || range === 'all') return true;
+    if (range === 'today') return dateStr === today();
+    var days = parseInt(range, 10);
+    if (!(days > 0)) return true;
+    var from = new Date();
+    from.setDate(from.getDate() - (days - 1));
+    return String(dateStr || '') >= DB.todayStr(from);
+  }
+
+  /** 单据状态是否命中筛选：'all' | 'paid' | 'partial' | 'unpaid' | 'open'(未结清) */
+  function statusHit(o, want) {
+    if (!want || want === 'all') return true;
+    var s = DB.orderStatus(o);
+    if (want === 'open') return s !== 'paid';
+    return s === want;
   }
 
   function toast(msg, type) {
@@ -71,6 +112,8 @@
     { id: 'pos', name: '销售开单', ico: '🧾' },
     { id: 'sales', name: '销售管理', ico: '💰' },
     { id: 'purchase', name: '采购管理', ico: '🚚' },
+    { id: 'customers', name: '客户管理', ico: '👥' },
+    { id: 'suppliers', name: '供应商', ico: '🏭' },
     { id: 'inventory', name: '库存管理', ico: '🏬' },
     { id: 'reports', name: '报表分析', ico: '📈' },
     { id: 'finance', name: '财务管理', ico: '🏦' },
@@ -115,7 +158,8 @@
       if (v > 0) bars += '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" font-size="10" text-anchor="middle" fill="#6B7280">' + short(v) + '</text>';
       bars += '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (h - pad + 14) + '" font-size="10" text-anchor="middle" fill="#6B7280">' + esc(l) + '</text>';
     });
-    return '<svg class="chart" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + bars + '</svg>';
+    // 等比缩放：preserveAspectRatio="none" 会把文字随视口拉扁，手机上尤其明显（MNR-01）
+    return '<svg class="chart" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid meet">' + bars + '</svg>';
   }
 
   /* ============================================================
@@ -166,8 +210,7 @@
     document.getElementById('viewTitle').textContent = '商品管理';
     var list = DB.all('products');
     var cats = Array.from(new Set(list.map(function (p) { return p.category; }).filter(Boolean)));
-    var filter = window.__prodFilter || { kw: '', cat: '全部' };
-    window.__prodFilter = filter;
+    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '', cat: '全部' });
 
     var rows = list.filter(function (p) {
       if (filter.cat !== '全部' && p.category !== filter.cat) return false;
@@ -271,13 +314,12 @@
     var prods = DB.all('products');
     var cats = ['全部'].concat(Array.from(new Set(prods.map(function (p) { return p.category; }).filter(Boolean))));
     var chips = cats.map(function (c) { return '<button class="chip ' + (pos.cat === c ? 'active' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>'; }).join('');
-    var custOpts = '<option value="">散客</option>' + DB.all('customers').map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('');
 
     app.innerHTML =
       '<div class="view-head"><h2>销售开单</h2><span class="sub">选商品 → 填数量 → 结算（支持欠款/多单位）</span></div>' +
       '<div class="pos">' +
       '<div class="card card__pad">' +
-      '<div class="search" style="margin-bottom:10px"><span>🔍</span><input id="posKw" placeholder="搜索商品名称/品牌"/></div>' +
+      '<div class="search" style="margin-bottom:10px"><span>🔍</span><input id="posKw" placeholder="搜索商品名称/品牌/型号/类型"/></div>' +
       '<div class="cats" id="posCats">' + chips + '</div>' +
       '<div class="prod-grid" id="posGrid"></div>' +
       '</div>' +
@@ -290,10 +332,11 @@
     });
     renderPosGrid(); renderPosCart();
   };
+  /** 搜索范围与商品管理保持一致：名称 + 品牌 + 型号 + 类型（MNR-08） */
   function filterPos() {
-    var cards = $('#posGrid').children;
-    Array.prototype.forEach.call(cards, function (card) {
-      var t = (card.getAttribute('data-name') + card.getAttribute('data-brand')).toLowerCase();
+    var grid = $('#posGrid'); if (!grid) return;
+    Array.prototype.forEach.call(grid.children, function (card) {
+      var t = card.getAttribute('data-s') || '';
       card.style.display = (!pos.kw || t.indexOf(pos.kw.toLowerCase()) >= 0) ? '' : 'none';
     });
   }
@@ -305,7 +348,8 @@
       return true;
     });
     grid.innerHTML = prods.map(function (p) {
-      return '<div class="prod-card" data-pid="' + p.id + '" data-name="' + esc(p.name.toLowerCase()) + '" data-brand="' + esc(p.brand.toLowerCase()) + '">' +
+      var s = ((p.name || '') + (p.brand || '') + (p.model || '') + (p.type || '')).toLowerCase();
+      return '<div class="prod-card" data-pid="' + p.id + '" data-s="' + esc(s) + '">' +
         '<div class="pic">📦</div><div class="nm">' + esc(p.name) + '</div>' +
         '<div class="meta">' + esc(p.brand) + ' · ' + esc(p.type) + '</div>' +
         '<div class="meta">库存 ' + p.stock + ' ' + esc(p.unit) + '</div>' +
@@ -318,9 +362,15 @@
   }
   function addPos(pid) {
     var p = DB.get('products', pid); if (!p) return;
-    if (!pos.items[pid]) pos.items[pid] = { qty: 1, price: p.priceWholesale };
+    if (!pos.items[pid]) pos.items[pid] = { qty: 1, price: p.priceWholesale, tier: 'w' };
     else pos.items[pid].qty += 1;
     renderPosCart();
+  }
+  /** 档位 → 单价（w 批发 / r 零售 / c 自定义保持原值） */
+  function tierPrice(p, tier, cur) {
+    if (tier === 'r') return DB.round2(p.priceRetail);
+    if (tier === 'w') return DB.round2(p.priceWholesale);
+    return DB.round2(cur);
   }
   function renderPosCart() {
     var c = $('#posCart'); if (!c) return;
@@ -331,12 +381,18 @@
       if (!p) return '';
       var isOver = it.qty > p.stock;
       if (isOver) over.push(p.name + '（需 ' + it.qty + '，存 ' + p.stock + '）');
+      var tier = it.tier || 'w';
       return '<div class="cart-item' + (isOver ? ' over' : '') + '" data-pid="' + pid + '">' +
         '<div class="nm">' + esc(p.name) +
         (isOver ? '<span class="cart-warn">超库存</span>' : '') +
-        '<div class="meta muted">' + money(it.price) + '/' + esc(p.unit) + ' · 库存 ' + p.stock + '</div></div>' +
+        '<div class="meta muted">批发 ' + money(p.priceWholesale) + ' · 零售 ' + money(p.priceRetail) + ' · 库存 ' + p.stock + ' ' + esc(p.unit) + '</div></div>' +
+        '<div class="cart-ops">' +
         '<div class="qty"><button data-act="dec">−</button><input value="' + it.qty + '" data-act="set"/><button data-act="inc">＋</button></div>' +
-        '<div class="mono" style="width:78px;text-align:right">' + money(it.qty * it.price) + '</div>' +
+        '<input class="cart-price mono" data-act="price" type="number" step="0.01" min="0" value="' + it.price + '" title="本单成交单价"/>' +
+        '<select class="cart-tier" data-act="tier" title="价格档位">' +
+        opt([['w', '批发'], ['r', '零售'], ['c', '自定义']], tier) + '</select>' +
+        '</div>' +
+        '<div class="mono cart-amt">' + money(it.qty * it.price) + '</div>' +
         '<button class="btn btn--sm btn--danger" data-act="del">✕</button></div>';
     }).join('') : '<div class="empty">点击左侧商品加入购物车</div>';
 
@@ -345,7 +401,12 @@
     var total = Math.max(0, subtotal - discount);
     var paid = pos.paid || 0;
     var debt = Math.max(0, total - paid);
-    var custOpts = '<option value="">散客</option>' + DB.all('customers').map(function (c) { return '<option value="' + c.id + '" ' + (pos.customerId === c.id ? 'selected' : '') + '>' + esc(c.name) + '</option>'; }).join('');
+    // 停用客户不再出现在开单下拉；末尾提供现场建档入口（批发现场高频）
+    var custOpts = '<option value="">散客</option>' +
+      activeParties('customers').map(function (x) {
+        return '<option value="' + x.id + '"' + (pos.customerId === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>';
+      }).join('') +
+      '<option value="__new__">＋ 新增客户…</option>';
 
     c.innerHTML =
       '<div class="card__head"><h3>结算</h3><button class="btn btn--sm btn--ghost" onclick="App.clearPos()">清空</button></div>' +
@@ -364,7 +425,14 @@
       '<button class="btn btn--primary btn--block mt12" onclick="App.settlePos()">💰 确认结算</button>' +
       '</div></div>';
 
-    $('#posCust').addEventListener('change', function (e) { pos.customerId = e.target.value || null; });
+    $('#posCust').addEventListener('change', function (e) {
+      if (e.target.value === '__new__') {         // 现场建档：新客户上门就要开单
+        e.target.value = pos.customerId || '';
+        window.App.editCustomer('', true);
+        return;
+      }
+      pos.customerId = e.target.value || null;
+    });
     $('#posDisc').addEventListener('input', function (e) { pos.discount = parseFloat(e.target.value) || 0; renderPosCart(); });
     $('#posPaid').addEventListener('input', function (e) { pos.paid = parseFloat(e.target.value) || 0; renderPosCart(); });
     $('#posMethod').addEventListener('change', function (e) { pos.method = e.target.value; });
@@ -373,19 +441,52 @@
       row.querySelector('[data-act="inc"]').addEventListener('click', function () { pos.items[pid].qty++; renderPosCart(); });
       row.querySelector('[data-act="dec"]').addEventListener('click', function () { if (pos.items[pid].qty > 1) pos.items[pid].qty--; else delete pos.items[pid]; renderPosCart(); });
       row.querySelector('[data-act="del"]').addEventListener('click', function () { delete pos.items[pid]; renderPosCart(); });
-      // 手输数量：input/change 都要即时重算合计与超库存提示（重绘后把光标还回原输入框）
+      // 手输数量：input/change 都要即时重算合计与超库存提示
       var setQty = function (e) {
         var v = parseInt(e.target.value, 10);
         if (!(v > 0)) v = 1;
         if (!pos.items[pid]) return;
         pos.items[pid].qty = v;
+        uiState.posFocus = { pid: pid, act: 'set' };
         renderPosCart();
-        var back = c.querySelector('.cart-item[data-pid="' + pid + '"] [data-act="set"]');
-        if (back && back.focus) { try { back.focus(); back.setSelectionRange(String(v).length, String(v).length); } catch (ignore) { } }
       };
       row.querySelector('[data-act="set"]').addEventListener('input', setQty);
       row.querySelector('[data-act="set"]').addEventListener('change', setQty);
+      // 改单价：用 change 而非 input，避免每敲一个字符就整块重绘导致光标跳走（GAP-01）
+      row.querySelector('[data-act="price"]').addEventListener('change', function (e) {
+        if (!pos.items[pid]) return;
+        var v = parseFloat(e.target.value);
+        pos.items[pid].price = DB.round2(v > 0 ? v : 0);
+        pos.items[pid].tier = 'c';               // 手改过就算自定义价
+        uiState.posFocus = { pid: pid, act: 'price' };
+        renderPosCart();
+      });
+      // 切价格档位：批发 / 零售 一键回填，自定义保持当前价
+      row.querySelector('[data-act="tier"]').addEventListener('change', function (e) {
+        var p = DB.get('products', pid);
+        if (!pos.items[pid] || !p) return;
+        pos.items[pid].tier = e.target.value;
+        pos.items[pid].price = tierPrice(p, e.target.value, pos.items[pid].price);
+        uiState.posFocus = { pid: pid, act: 'tier' };
+        renderPosCart();
+      });
     });
+    restorePosFocus(c);
+  }
+  /** 全量重绘后把焦点还给刚编辑的控件，否则连续改价改量会一直丢焦点 */
+  function restorePosFocus(c) {
+    var f = uiState.posFocus;
+    if (!f) return;
+    uiState.posFocus = null;
+    var el = c.querySelector('.cart-item[data-pid="' + f.pid + '"] [data-act="' + f.act + '"]');
+    if (!el || !el.focus) return;
+    try {
+      el.focus();
+      // number 类型输入框调 setSelectionRange 在部分浏览器会抛错，这里只对文本框做
+      if (el.setSelectionRange && el.type !== 'number' && el.tagName === 'INPUT') {
+        el.setSelectionRange(String(el.value).length, String(el.value).length);
+      }
+    } catch (ignore) { /* 焦点恢复失败不影响业务 */ }
   }
   window.App.clearPos = function () { pos.items = {}; pos.discount = 0; pos.paid = 0; renderPosCart(); };
   window.App.settlePos = function () {
@@ -414,18 +515,49 @@
   /* ---------- 销售管理 ---------- */
   views.sales = function () {
     document.getElementById('viewTitle').textContent = '销售管理';
-    var list = DB.all('sales').slice().sort(function (a, b) { return b.ts - a.ts; });
-    var rows = list.map(function (o) {
+    var f = uiState.saleFilter || (uiState.saleFilter = { status: 'all', range: 'all', kw: '' });
+    app.innerHTML =
+      '<div class="view-head"><h2>销售管理</h2><span class="sub" id="saleSub"></span></div>' +
+      '<div class="row wrap" style="margin-bottom:12px">' +
+      '<select class="sel" id="saStatus">' +
+      opt([['all', '全部状态'], ['open', '未结清（含部分收）'], ['unpaid', '欠款'], ['partial', '部分收'], ['paid', '已结清']], f.status) +
+      '</select>' +
+      '<select class="sel" id="saRange">' +
+      opt([['all', '全部日期'], ['today', '今日'], ['7', '近 7 天'], ['30', '近 30 天']], f.range) +
+      '</select>' +
+      '<div class="search"><span>🔍</span><input id="saKw" placeholder="搜索单号 / 客户" value="' + esc(f.kw) + '"/></div>' +
+      '</div>' +
+      '<div class="card"><table class="table"><thead><tr><th>单号</th><th>日期</th><th>客户</th><th class="right">金额</th><th class="right">已收</th><th>状态</th><th class="right">操作</th></tr></thead><tbody id="saleBody"></tbody></table></div>';
+
+    $('#saStatus').addEventListener('change', function (e) { f.status = e.target.value; renderSaleRows(); });
+    $('#saRange').addEventListener('change', function (e) { f.range = e.target.value; renderSaleRows(); });
+    $('#saKw').addEventListener('input', function (e) { f.kw = e.target.value; renderSaleRows(); });
+    renderSaleRows();
+  };
+  function renderSaleRows() {
+    var body = $('#saleBody'); if (!body) return;
+    var f = uiState.saleFilter, kw = (f.kw || '').toLowerCase();
+    var all = DB.all('sales');
+    var list = all.slice().sort(function (a, b) { return b.ts - a.ts; }).filter(function (o) {
+      if (!statusHit(o, f.status)) return false;
+      if (!inRange(o.date, f.range)) return false;
+      if (kw && ((o.no || '') + (o.customerName || '')).toLowerCase().indexOf(kw) < 0) return false;
+      return true;
+    });
+    body.innerHTML = list.map(function (o) {
       return '<tr data-id="' + o.id + '" class="clk">' +
         '<td>' + esc(o.no) + '</td><td>' + esc(o.date) + '</td><td>' + esc(o.customerName) + '</td>' +
-        '<td class="mono">' + money(o.total) + '</td><td class="mono">' + money(o.paid) + '</td>' +
+        '<td class="right mono">' + money(o.total) + '</td><td class="right mono">' + money(o.paid) + '</td>' +
         '<td>' + statusTag(DB.orderStatus(o)) + '</td>' +
         '<td class="right"><button class="btn btn--sm" onclick="App.openSale(\'' + o.id + '\')">详情</button></td></tr>';
-    }).join('') || '<tr><td colspan="7" class="empty">暂无销售单</td></tr>';
-    app.innerHTML =
-      '<div class="view-head"><h2>销售管理</h2><span class="sub">共 ' + list.length + ' 张销售单</span></div>' +
-      '<div class="card"><table class="table"><thead><tr><th>单号</th><th>日期</th><th>客户</th><th>金额</th><th>已收</th><th>状态</th><th class="right">操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-  };
+    }).join('') || '<tr class="empty-row"><td colspan="7" class="empty">' + (all.length ? '没有匹配的销售单' : '暂无销售单') + '</td></tr>';
+    var sub = $('#saleSub');
+    if (sub) {
+      var amt = list.reduce(function (a, o) { return a + o.total; }, 0);
+      var debt = list.reduce(function (a, o) { return a + Math.max(0, o.total - o.paid); }, 0);
+      sub.textContent = list.length + ' / ' + all.length + ' 张单 · 金额 ' + money(amt) + ' · 欠款 ' + money(debt);
+    }
+  }
   window.App.openSale = function (id) {
     var o = DB.get('sales', id); if (!o) return;
     var items = o.items.map(function (it) {
@@ -478,27 +610,52 @@
     var list = DB.all('purchases').slice().sort(function (a, b) { return b.ts - a.ts; });
     var rows = list.map(function (o) {
       return '<tr data-id="' + o.id + '" class="clk"><td>' + esc(o.no) + '</td><td>' + esc(o.date) + '</td><td>' + esc(o.supplierName) + '</td>' +
-        '<td class="mono">' + money(o.total) + '</td><td class="mono">' + money(o.paid) + '</td><td>' + statusTag(DB.orderStatus(o)) + '</td>' +
+        '<td class="right mono">' + money(o.total) + '</td><td class="right mono">' + money(o.paid) + '</td>' +
+        '<td>' + statusTag(DB.orderStatus(o), 'purchase') + '</td>' +
         '<td class="right"><button class="btn btn--sm" onclick="App.openPurchase(\'' + o.id + '\')">详情</button></td></tr>';
-    }).join('') || '<tr><td colspan="7" class="empty">暂无采购单</td></tr>';
+    }).join('') || '<tr class="empty-row"><td colspan="7" class="empty">暂无采购单</td></tr>';
     app.innerHTML =
       '<div class="view-head"><h2>采购管理</h2><span class="sub">共 ' + list.length + ' 张进货单</span>' +
       '<div class="spacer"></div><button class="btn btn--primary" onclick="App.openPurchaseForm()">＋ 新建进货单</button></div>' +
-      '<div class="card"><table class="table"><thead><tr><th>单号</th><th>日期</th><th>供应商</th><th>金额</th><th>已付</th><th>状态</th><th class="right">操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+      '<div class="card"><table class="table"><thead><tr><th>单号</th><th>日期</th><th>供应商</th><th class="right">金额</th><th class="right">已付</th><th>状态</th><th class="right">操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   };
   window.App.openPurchase = function (id) {
     var o = DB.get('purchases', id); if (!o) return;
     var items = o.items.map(function (it) { return '<tr><td>' + esc(it.name) + '</td><td>' + esc(it.unit) + '</td><td class="mono">' + it.qty + '</td><td class="mono">' + money(it.price) + '</td><td class="mono">' + money(it.subtotal) + '</td></tr>'; }).join('');
-    var debt = o.total - o.paid;
+    var debt = DB.round2(o.total - o.paid);
     openModal('进货单 ' + o.no,
-      '<div class="row between"><span class="muted">供应商：' + esc(o.supplierName) + '</span><span>' + statusTag(DB.orderStatus(o)) + '</span></div>' +
+      '<div class="row between"><span class="muted">供应商：' + esc(o.supplierName || '其他供应商') + '</span><span>' + statusTag(DB.orderStatus(o), 'purchase') + '</span></div>' +
       '<table class="table mt12"><thead><tr><th>商品</th><th>单位</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>' + items + '</tbody></table>' +
-      '<div class="settle-line total"><span>进货总额</span><span class="v">' + money(o.total) + '</span></div>' +
-      (debt > 0 ? '<div class="settle-line"><span>未付</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' : ''),
-      '<button class="btn" onclick="App.closeModal()">关闭</button>');
+      '<div class="settle-line"><span>进货总额</span><span class="v">' + money(o.total) + '</span></div>' +
+      '<div class="settle-line"><span>已付</span><span class="v">' + money(o.paid) + '</span></div>' +
+      (debt > 0.005 ? '<div class="settle-line total"><span>未付</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' : ''),
+      '<button class="btn" onclick="App.closeModal()">关闭</button>' +
+      (debt > 0.005 ? '<button class="btn btn--primary" onclick="App.payPurchase(\'' + o.id + '\')">💰 付款 ' + money(debt) + '</button>' : ''));
+  };
+  /** 进货单付款：只冲抵本单，超额自动截断（复用 receiveOnOrder，MNR-02） */
+  window.App.payPurchase = function (id) {
+    var o = DB.get('purchases', id); if (!o) return;
+    var left = DB.round2(o.total - o.paid);
+    openModal('付款 — ' + o.no,
+      '<div class="field"><label>供应商</label><input value="' + esc(o.supplierName || '其他供应商') + '" disabled/></div>' +
+      '<div class="field"><label>未付金额</label><input value="' + left + '" disabled/></div>' +
+      '<div class="field"><label>本次付款</label><input id="ppAmt" type="number" step="0.01" value="' + left + '"/></div>' +
+      '<p class="muted">付款只冲抵本张进货单，超出未付金额的部分不会记账。</p>',
+      '<button class="btn" onclick="App.closeModal()">取消</button>' +
+      '<button class="btn btn--primary" onclick="App.doPayPurchase(\'' + id + '\')">确认付款</button>');
+  };
+  window.App.doPayPurchase = function (id) {
+    var amt = parseFloat($('#ppAmt').value) || 0;
+    if (amt <= 0) { toast('请输入付款金额', 'err'); return; }
+    var r = DB.receiveOnOrder('purchases', id, amt);
+    closeModal();
+    reportPayment(r, '付款');
+    route();
   };
   window.App.openPurchaseForm = function () {
-    var supOpts = '<option value="">选择供应商</option>' + DB.all('suppliers').map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('');
+    var sups = activeParties('suppliers');
+    if (!sups.length) { toast('请先到「供应商」新增一个供应商', 'err'); return; }
+    var supOpts = '<option value="">选择供应商</option>' + sups.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('');
     var prodOpts = DB.all('products').map(function (p) { return '<option value="' + p.id + '">' + esc(p.name + ' (' + p.brand + ')') + '</option>'; }).join('');
     openModal('新建进货单',
       '<div class="field"><label>供应商</label><select id="puSup">' + supOpts + '</select></div>' +
@@ -508,19 +665,19 @@
       '<div class="field"><label>付款方式</label><select id="puMethod"><option>银行</option><option>微信</option><option>现金</option><option>欠款</option></select></div>' +
       '<div id="puSum" class="settle-line total"><span>合计</span><span class="v">¥0.00</span></div>',
       '<button class="btn" onclick="App.closeModal()">取消</button><button class="btn btn--primary" onclick="App.savePurchase()">入库并保存</button>');
-    window.__puRows = [];
+    uiState.puRows = [];
+    uiState.prodOpts = prodOpts;
     window.App.addPuRow();
-    window.__prodOpts = prodOpts;
   };
   window.App.addPuRow = function () {
-    var rows = window.__puRows;
+    var rows = uiState.puRows || (uiState.puRows = []);
     rows.push({ pid: DB.all('products')[0] ? DB.all('products')[0].id : '', qty: 1, price: 0 });
     renderPuRows();
   };
   function renderPuRows() {
     var box = $('#puRows'); if (!box) return;
-    var opts = window.__prodOpts || DB.all('products').map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('');
-    box.innerHTML = window.__puRows.map(function (r, i) {
+    var opts = uiState.prodOpts || DB.all('products').map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('');
+    box.innerHTML = (uiState.puRows || []).map(function (r, i) {
       return '<div class="row" style="gap:6px;margin-bottom:6px" data-i="' + i + '">' +
         '<select class="pu-pid" style="flex:2">' + opts.replace('value="' + r.pid + '"', 'value="' + r.pid + '" selected') + '</select>' +
         '<input class="pu-qty" type="number" value="' + r.qty + '" style="width:60px" placeholder="数量"/>' +
@@ -528,21 +685,21 @@
         '<button class="btn btn--sm btn--danger" onclick="App.delPuRow(' + i + ')">✕</button></div>';
     }).join('');
     Array.prototype.forEach.call(box.children, function (row, i) {
-      row.querySelector('.pu-pid').addEventListener('change', function (e) { window.__puRows[i].pid = e.target.value; });
-      row.querySelector('.pu-qty').addEventListener('input', function (e) { window.__puRows[i].qty = parseInt(e.target.value) || 0; updatePuSum(); });
-      row.querySelector('.pu-price').addEventListener('input', function (e) { window.__puRows[i].price = parseFloat(e.target.value) || 0; updatePuSum(); });
+      row.querySelector('.pu-pid').addEventListener('change', function (e) { uiState.puRows[i].pid = e.target.value; });
+      row.querySelector('.pu-qty').addEventListener('input', function (e) { uiState.puRows[i].qty = parseInt(e.target.value) || 0; updatePuSum(); });
+      row.querySelector('.pu-price').addEventListener('input', function (e) { uiState.puRows[i].price = parseFloat(e.target.value) || 0; updatePuSum(); });
     });
     updatePuSum();
   }
-  window.App.delPuRow = function (i) { window.__puRows.splice(i, 1); renderPuRows(); };
+  window.App.delPuRow = function (i) { uiState.puRows.splice(i, 1); renderPuRows(); };
   function updatePuSum() {
-    var sum = window.__puRows.reduce(function (a, r) { return a + (r.qty || 0) * (r.price || 0); }, 0);
+    var sum = (uiState.puRows || []).reduce(function (a, r) { return a + (r.qty || 0) * (r.price || 0); }, 0);
     var el = $('#puSum'); if (el) el.innerHTML = '<span>合计</span><span class="v">' + money(sum) + '</span>';
   }
   window.App.savePurchase = function () {
     var sid = $('#puSup').value;
     if (!sid) { toast('请选择供应商', 'err'); return; }
-    var items = window.__puRows.filter(function (r) { return r.pid && r.qty > 0; }).map(function (r) { return { productId: r.pid, qty: r.qty, price: r.price || 0 }; });
+    var items = (uiState.puRows || []).filter(function (r) { return r.pid && r.qty > 0; }).map(function (r) { return { productId: r.pid, qty: r.qty, price: r.price || 0 }; });
     if (!items.length) { toast('请至少添加一件商品', 'err'); return; }
     var sup = DB.get('suppliers', sid);
     var paid = parseFloat($('#puPaid').value) || 0;
@@ -552,20 +709,139 @@
     closeModal(); toast('进货入库成功', 'ok'); route();
   };
 
+  /* ---------- 客户 / 供应商档案（GAP-02） ----------
+     两张表结构同构，用同一套渲染与增删改逻辑，避免复制粘贴走偏。 */
+  function partyStats(col) {
+    var isC = col === 'customers';
+    var key = isC ? 'customerId' : 'supplierId';
+    var amt = {}, debt = {}, cnt = {};
+    DB.all(isC ? 'sales' : 'purchases').forEach(function (o) {
+      var id = o[key]; if (!id) return;
+      amt[id] = DB.round2((amt[id] || 0) + Number(o.total || 0));
+      debt[id] = DB.round2((debt[id] || 0) + Math.max(0, DB.round2(o.total - o.paid)));
+      cnt[id] = (cnt[id] || 0) + 1;
+    });
+    return { amt: amt, debt: debt, cnt: cnt };
+  }
+  function partyView(col) {
+    var isC = col === 'customers';
+    var title = isC ? '客户管理' : '供应商';
+    var fKey = isC ? 'custFilter' : 'supFilter';
+    var f = uiState[fKey] || (uiState[fKey] = { kw: '' });
+    document.getElementById('viewTitle').textContent = title;
+    app.innerHTML =
+      '<div class="view-head"><h2>' + title + '</h2><span class="sub" id="partySub"></span>' +
+      '<div class="spacer"></div>' +
+      '<button class="btn btn--primary" onclick="App.' + (isC ? 'editCustomer' : 'editSupplier') + '()">＋ 新增' + (isC ? '客户' : '供应商') + '</button></div>' +
+      '<div class="row wrap" style="margin-bottom:12px"><div class="search"><span>🔍</span>' +
+      '<input id="' + (isC ? 'custKw' : 'supKw') + '" placeholder="搜索名称 / 电话 / 地址" value="' + esc(f.kw) + '"/></div></div>' +
+      '<div class="card"><table class="table"><thead><tr>' +
+      '<th>' + (isC ? '客户名称' : '供应商名称') + '</th><th>电话</th><th>地址</th>' +
+      '<th class="right">累计交易额</th><th class="right">' + (isC ? '当前欠款' : '当前应付') + '</th>' +
+      '<th>状态</th><th class="right">操作</th>' +
+      '</tr></thead><tbody id="' + (isC ? 'custBody' : 'supBody') + '"></tbody></table></div>';
+    $('#' + (isC ? 'custKw' : 'supKw')).addEventListener('input', function (e) { f.kw = e.target.value; renderPartyRows(col); });
+    renderPartyRows(col);
+  }
+  function renderPartyRows(col) {
+    var isC = col === 'customers';
+    var body = $(isC ? '#custBody' : '#supBody'); if (!body) return;
+    var f = uiState[isC ? 'custFilter' : 'supFilter'] || { kw: '' };
+    var kw = (f.kw || '').toLowerCase();
+    var st = partyStats(col);
+    var all = DB.all(col);
+    var list = all.filter(function (x) {
+      if (!kw) return true;
+      return ((x.name || '') + (x.phone || '') + (x.address || '')).toLowerCase().indexOf(kw) >= 0;
+    });
+    body.innerHTML = list.map(function (x) {
+      var d = st.debt[x.id] || 0;
+      return '<tr data-id="' + x.id + '">' +
+        '<td><b>' + esc(x.name) + '</b></td>' +
+        '<td class="muted">' + esc(x.phone) + '</td>' +
+        '<td class="muted">' + esc(x.address) + '</td>' +
+        '<td class="right mono">' + money(st.amt[x.id] || 0) + ' <span class="muted">/ ' + (st.cnt[x.id] || 0) + ' 笔</span></td>' +
+        '<td class="right mono">' + (d > 0.005 ? '<span style="color:var(--c-danger)">' + money(d) + '</span>' : money(0)) + '</td>' +
+        '<td>' + (x.archived ? '<span class="tag tag--warning">停用</span>' : '<span class="tag tag--success">正常</span>') + '</td>' +
+        '<td class="right">' +
+        '<button class="btn btn--sm" onclick="App.' + (isC ? 'editCustomer' : 'editSupplier') + '(\'' + x.id + '\')">编辑</button> ' +
+        (x.archived
+          ? '<button class="btn btn--sm" onclick="App.' + (isC ? 'restoreCustomer' : 'restoreSupplier') + '(\'' + x.id + '\')">启用</button>'
+          : '<button class="btn btn--sm btn--danger" onclick="App.' + (isC ? 'delCustomer' : 'delSupplier') + '(\'' + x.id + '\')">删除</button>') +
+        '</td></tr>';
+    }).join('') || '<tr class="empty-row"><td colspan="7" class="empty">没有匹配的' + (isC ? '客户' : '供应商') + '</td></tr>';
+    var sub = $('#partySub');
+    if (sub) {
+      var owe = list.reduce(function (a, x) { return a + (st.debt[x.id] || 0); }, 0);
+      sub.textContent = '共 ' + all.length + ' 家 · 停用 ' + all.filter(function (x) { return x.archived; }).length +
+        ' · ' + (isC ? '应收' : '应付') + ' ' + money(owe);
+    }
+  }
+  views.customers = function () { partyView('customers'); };
+  views.suppliers = function () { partyView('suppliers'); };
+
+  /** 建档弹窗；fromPos=true 表示从开单页现场建档，保存后自动选中该客户 */
+  function partyForm(col, id, fromPos) {
+    var isC = col === 'customers';
+    var x = id ? DB.get(col, id) : null;
+    var pre = isC ? 'c_' : 's_';
+    openModal((x ? '编辑' : '新增') + (isC ? '客户' : '供应商'),
+      '<div class="field"><label>' + (isC ? '客户' : '供应商') + '名称 *</label><input id="' + pre + 'name" value="' + esc(x ? x.name : '') + '"/></div>' +
+      '<div class="field"><label>联系电话</label><input id="' + pre + 'phone" value="' + esc(x ? x.phone : '') + '"/></div>' +
+      '<div class="field"><label>地址</label><input id="' + pre + 'addr" value="' + esc(x ? x.address : '') + '"/></div>' +
+      '<div class="field"><label>备注</label><input id="' + pre + 'remark" value="' + esc(x ? x.remark : '') + '"/></div>' +
+      (x && x.archived ? '<p class="muted">当前为停用状态，不会出现在开单/进货下拉框，历史单据与欠款保持不变。</p>' : ''),
+      '<button class="btn" onclick="App.closeModal()">取消</button>' +
+      '<button class="btn btn--primary" onclick="App.' + (isC ? 'saveCustomer' : 'saveSupplier') +
+      '(\'' + (id || '') + '\'' + (fromPos ? ', true' : '') + ')">保存</button>');
+  }
+  function partySave(col, id, fromPos) {
+    var pre = col === 'customers' ? 'c_' : 's_';
+    var data = {
+      name: $('#' + pre + 'name').value.trim(),
+      phone: $('#' + pre + 'phone').value.trim(),
+      address: $('#' + pre + 'addr').value.trim(),
+      remark: $('#' + pre + 'remark').value.trim()
+    };
+    if (!data.name) { toast('请填写名称', 'err'); return; }
+    var dup = DB.all(col).filter(function (x) { return x.id !== id && x.name === data.name; }).length;
+    if (dup) { toast('已存在同名记录，请换个名称', 'err'); return; }
+    var x = id ? DB.update(col, id, data) : DB.insert(col, data);
+    closeModal();
+    toast('已保存', 'ok');
+    if (fromPos && x) { pos.customerId = x.id; renderPosCart(); return; }
+    route();
+  }
+  /** 删除保护：被单据引用过的往来单位禁止硬删，只能停用，否则历史单据与应收会对不上账 */
+  function partyDelete(col, id) {
+    var isC = col === 'customers';
+    var key = isC ? 'customerId' : 'supplierId';
+    var used = DB.all(isC ? 'sales' : 'purchases').filter(function (o) { return o[key] === id; }).length;
+    var label = isC ? '客户' : '供应商';
+    if (used) {
+      if (!confirm('该' + label + '已有 ' + used + ' 笔单据，删除会导致历史单据与欠款对不上账。\n是否改为「停用」？（停用后不再出现在开单下拉框，历史数据完整保留）')) return;
+      DB.update(col, id, { archived: true });
+      toast('已停用该' + label + '，历史单据与欠款保持不变', 'ok');
+      route(); return;
+    }
+    if (!confirm('确定删除该' + label + '？')) return;
+    DB.remove(col, id);
+    toast('已删除', 'ok');
+    route();
+  }
+  window.App.editCustomer = function (id, fromPos) { partyForm('customers', id, fromPos); };
+  window.App.saveCustomer = function (id, fromPos) { partySave('customers', id, fromPos); };
+  window.App.delCustomer = function (id) { partyDelete('customers', id); };
+  window.App.restoreCustomer = function (id) { DB.update('customers', id, { archived: false }); toast('已启用', 'ok'); route(); };
+  window.App.editSupplier = function (id) { partyForm('suppliers', id); };
+  window.App.saveSupplier = function (id) { partySave('suppliers', id); };
+  window.App.delSupplier = function (id) { partyDelete('suppliers', id); };
+  window.App.restoreSupplier = function (id) { DB.update('suppliers', id, { archived: false }); toast('已启用', 'ok'); route(); };
+
   /* ---------- 库存管理 ---------- */
   views.inventory = function () {
     document.getElementById('viewTitle').textContent = '库存管理';
-    // 必须 slice() 后再排序：DB.all 返回的是内部数组引用，直接 sort 会污染商品档案顺序（BUG-08）
-    var list = DB.all('products').slice().sort(function (a, b) { return a.stock - b.stock; });
-    var thr = DB.settings().lowStock;
-    var rows = list.map(function (p) {
-      var low = p.stock <= (p.lowStock || thr);
-      return '<tr><td><b>' + esc(p.name) + '</b><div class="meta muted">' + esc(p.brand) + ' · ' + esc(p.type) + '</div></td>' +
-        '<td>' + esc(p.category) + '</td><td>' + esc(p.unit) + '</td>' +
-        '<td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td>' +
-        '<td>' + esc(p.lowStock || thr) + '</td>' +
-        '<td class="right"><button class="btn btn--sm" onclick="App.adjustStock(\'' + p.id + '\')">调整</button></td></tr>';
-    }).join('');
+    var f = uiState.invFilter || (uiState.invFilter = { kw: '', lowOnly: false });
     var logs = DB.all('stockLogs').slice().sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); }).slice(0, 30)
       .map(function (l) {
         var cls = l.type === 'in' ? 'tag--success' : (l.type === 'out' ? 'tag--danger' : 'tag--warning');
@@ -573,12 +849,45 @@
         return '<tr><td>' + esc(l.date) + '</td><td><span class="tag ' + cls + '">' + t + '</span></td><td>' + esc(l.productName) + '</td><td class="mono">' + (l.qty > 0 ? '+' : '') + l.qty + '</td><td class="muted">' + esc(l.remark) + '</td></tr>';
       }).join('') || '<tr><td colspan="5" class="empty">暂无出入库记录</td></tr>';
 
+    var thr = DB.settings().lowStock;
+    var prods = DB.all('products');
+
     app.innerHTML =
-      '<div class="view-head"><h2>库存管理</h2><span class="sub">实时库存 · 低库存预警 · 出入库流水</span></div>' +
+      '<div class="view-head"><h2>库存管理</h2><span class="sub" id="invSub"></span></div>' +
+      '<div class="row wrap" style="margin-bottom:12px">' +
+      '<div class="search"><span>🔍</span><input id="invKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(f.kw) + '"/></div>' +
+      '<label class="row" style="gap:6px;font-size:13px;color:var(--c-muted)"><input type="checkbox" id="invLowOnly"' + (f.lowOnly ? ' checked' : '') + '/> 只看预警</label>' +
+      '</div>' +
       '<div class="grid grid--2">' +
-      card('实时库存（' + list.length + '）', '<table class="table"><thead><tr><th>商品</th><th>分类</th><th>单位</th><th>库存</th><th>阈值</th><th class="right">操作</th></tr></thead><tbody>' + rows + '</tbody></table>') +
+      card('实时库存（<span id="inv" style="display:none"></span><span id="invCount"></span>）', '<table class="table"><thead><tr><th>商品</th><th>分类</th><th>单位</th><th>库存</th><th>阈值</th><th class="right">操作</th></tr></thead><tbody id="invBody"></tbody></table>') +
       card('出入库流水（最近30条）', '<div style="max-height:520px;overflow:auto"><table class="table"><thead><tr><th>日期</th><th>类型</th><th>商品</th><th>数量</th><th>备注</th></tr></thead><tbody>' + logs + '</tbody></table></div>') +
       '</div>';
+
+    $('#invKw').addEventListener('input', function (e) { f.kw = e.target.value; renderInvRows(); });
+    $('#invLowOnly').addEventListener('change', function (e) { f.lowOnly = e.target.checked; renderInvRows(); });
+    renderInvRows();
+
+    function renderInvRows() {
+      var body = $('#invBody'); if (!body) return;
+      var rows = prods.filter(function (p) {
+        if (f.lowOnly && !(p.stock <= (p.lowStock || thr))) return false;
+        if (f.kw && (p.name + p.brand + p.model + p.type).toLowerCase().indexOf(f.kw.toLowerCase()) < 0) return false;
+        return true;
+      }).map(function (p) {
+        var low = p.stock <= (p.lowStock || thr);
+        return '<tr data-pid="' + p.id + '">' +
+          '<td><b>' + esc(p.name) + '</b></td>' +
+          '<td>' + esc(p.category) + '</td>' +
+          '<td>' + esc(p.unit) + '</td>' +
+          '<td class="mono">' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td>' +
+          '<td class="muted">' + (p.lowStock || thr) + '</td>' +
+          '<td class="right"><button class="btn btn--sm" onclick="App.adjustStock(\'' + p.id + '\')">调整</button></td>' +
+          '</tr>';
+      }).join('') || '<tr class="empty-row"><td colspan="6" class="empty">没有匹配的库存</td></tr>';
+      body.innerHTML = rows;
+      var cnt = $('#invCount'); if (cnt) cnt.textContent = prods.length;
+      var sub = $('#invSub'); if (sub) sub.textContent = '实时库存 · 低库存预警 ' + DB.stockWarnings().length + ' 项 · 出入库流水';
+    }
   };
   window.App.adjustStock = function (pid) {
     var p = DB.get('products', pid); if (!p) return;
@@ -607,6 +916,10 @@
     purch.forEach(function (p) { p.items.forEach(function (it) { lastCost[it.productId] = it.price; }); });
     var cost = sales.reduce(function (a, s) { return a + s.items.reduce(function (x, it) { return x + it.qty * (lastCost[it.productId] || 0); }, 0); }, 0);
     var profit = revenue - cost;
+    // 无采购成本商品：毛利为估算值，缺成本会让毛利虚高，报表需显著提示（F6）
+    var noCostIds = {};
+    sales.forEach(function (s) { s.items.forEach(function (it) { if (!lastCost[it.productId]) noCostIds[it.productId] = 1; }); });
+    var missN = Object.keys(noCostIds).length;
     var receiv = DB.receivables().reduce(function (a, r) { return a + r.debt; }, 0);
     var payab = DB.payables().reduce(function (a, p) { return a + p.unpaid; }, 0);
     var top = DB.topProducts(6);
@@ -616,6 +929,7 @@
     }).filter(function (x) { return x.amt > 0; }).sort(function (a, b) { return b.amt - a.amt; }).slice(0, 6);
 
     app.innerHTML =
+      (missN > 0 ? '<p class="muted mt12">⚠️ 毛利为估算值：有 ' + missN + ' 种商品无采购成本记录，成本按 0 计算，毛利可能偏高。</p>' : '') +
       '<div class="grid grid--kpi">' +
       kpiCard('累计销售额', money(revenue), '📈', '') +
       kpiCard('毛利(估算)', money(profit), '💡', 'kpi--success') +
@@ -767,7 +1081,7 @@
   window.App.closeModal = closeModal;
   window.App.openSheet = openSheet;
   window.App.closeSheet = closeSheet;
-  window.App.__route = route;   // 测试钩子：同步触发渲染（jsdom 的 hashchange 是异步的）
+  window.App.routeSync = route;   // 测试钩子：同步触发渲染（jsdom 的 hashchange 是异步的）
 
   // 绑定底部「我的」菜单
   document.getElementById('bottomNav').addEventListener('click', function (e) {

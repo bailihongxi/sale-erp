@@ -8,9 +8,13 @@
    ============================================================ */
 'use strict';
 
-var boot = require('./helpers/dom.js').boot;
+var helpers = require('./helpers/dom.js');
+var boot = helpers.boot;
 
-var MODULES = ['dashboard', 'products', 'pos', 'sales', 'purchase', 'inventory', 'reports', 'finance', 'settings', 'data'];
+/* Sprint 2 起模块由 10 → 12（新增 客户管理 / 供应商，GAP-02） */
+var MODULES = ['dashboard', 'products', 'pos', 'sales', 'purchase', 'customers', 'suppliers',
+  'inventory', 'reports', 'finance', 'settings', 'data'];
+var NAV_COUNT = MODULES.length;
 
 function run() {
 
@@ -28,11 +32,11 @@ function run() {
   check('工作台渲染出趋势图', !!t.$('#view svg.chart'));
 
   section('D2 导航结构');
-  check('侧边栏导航项 = 10', t.$$('#nav .nav__item').length === 10, t.$$('#nav .nav__item').length);
+  check('侧边栏导航项 = ' + NAV_COUNT, t.$$('#nav .nav__item').length === NAV_COUNT, t.$$('#nav .nav__item').length);
   check('侧边栏含 2 个分组标题', t.$$('#nav .nav__group').length === 2);
   check('手机底部导航 4 项', t.$$('#bottomNav .nav__item').length === 4, t.$$('#bottomNav .nav__item').length);
   check('手机底部含"我的"入口', t.$$('#bottomNav [data-id="more"]').length === 1);
-  check('Sheet 内含全部模块导航', t.$$('#sheetNav .nav__item').length === 10);
+  check('Sheet 内含全部模块导航', t.$$('#sheetNav .nav__item').length === NAV_COUNT, t.$$('#sheetNav .nav__item').length);
 
   section('D3 十个模块视图均可渲染');
   MODULES.forEach(function (id) {
@@ -249,6 +253,227 @@ function run() {
   check('横幅可见（非 toast 一闪而过）', banner && banner.classList.contains('show'));
   check('横幅文案提示导出备份', banner && /备份|导出/.test(banner.textContent), banner ? banner.textContent : '');
   check('横幅带立即导出按钮', !!e6.$('#persistBanner button'));
+
+  /* ========================================================
+     F v1 验收补齐（Sprint 2）
+     ======================================================== */
+  section('F1 购物车改单价 + 多价格档位（GAP-01）');
+  var f1 = boot({ hash: '#pos' });
+  f1.click(f1.$('#posGrid .prod-card'));
+  var f1pid = f1.$('#posCart .cart-item').getAttribute('data-pid');
+  var f1p = f1.DB.get('products', f1pid);
+  check('购物车行含单价输入框', !!f1.$('#posCart .cart-item [data-act="price"]'));
+  check('购物车行含价格档位选择', !!f1.$('#posCart .cart-item [data-act="tier"]'));
+  check('默认档位=批发价', Number(f1.$('#posCart .cart-item [data-act="price"]').value) === f1p.priceWholesale,
+    f1.$('#posCart .cart-item [data-act="price"]').value + ' vs ' + f1p.priceWholesale);
+  var f1price = f1.$('#posCart .cart-item [data-act="price"]');
+  f1price.value = '888'; f1.fire(f1price, 'change');
+  check('改单价后合计立即更新', f1.$('#posCart').textContent.indexOf(fmt(888)) >= 0, f1.$('#posCart').textContent.slice(0, 300));
+  check('手改价后档位切换为自定义', f1.$('#posCart .cart-item [data-act="tier"]').value === 'c',
+    f1.$('#posCart .cart-item [data-act="tier"]').value);
+  var f1tier = f1.$('#posCart .cart-item [data-act="tier"]');
+  f1tier.value = 'r'; f1.fire(f1tier, 'change');
+  check('切「零售」单价跳到零售价', Number(f1.$('#posCart .cart-item [data-act="price"]').value) === f1p.priceRetail,
+    f1.$('#posCart .cart-item [data-act="price"]').value + ' vs ' + f1p.priceRetail);
+  check('切档位后合计按零售价重算', f1.$('#posCart').textContent.indexOf(fmt(f1p.priceRetail)) >= 0);
+  var f1qty = f1.$('#posCart [data-act="set"]');
+  f1qty.value = '5'; f1.fire(f1qty, 'change');
+  check('数量 × 单价 合计正确', f1.$('#posCart').textContent.indexOf(fmt(5 * f1p.priceRetail)) >= 0,
+    f1.$('#posCart').textContent.slice(0, 400));
+  f1.App.settlePos();
+  var f1order = f1.DB.all('sales').slice(-1)[0];
+  check('结算写入手改后的单价', Math.abs(f1order.items[0].price - f1p.priceRetail) < 0.005, f1order.items[0].price);
+  check('结算总额 = 数量 × 改后单价', Math.abs(f1order.total - 5 * f1p.priceRetail) < 0.005, f1order.total);
+  check('改价流程无 JS 错误', f1.errors.length === 0, f1.errors.join(' | '));
+
+  section('F2 客户档案管理 + 删除保护（GAP-02）');
+  var f2 = boot();
+  check('侧边栏出现客户管理入口', f2.$$('#nav [data-id="customers"]').length === 1);
+  check('侧边栏出现供应商入口', f2.$$('#nav [data-id="suppliers"]').length === 1);
+  f2.go('customers');
+  check('客户管理标题正确', f2.text('#viewTitle') === '客户管理', f2.text('#viewTitle'));
+  check('客户表格渲染 3 行种子数据', f2.$$('#custBody tr[data-id]').length === 3, f2.$$('#custBody tr[data-id]').length);
+  check('客户表含累计交易额列', f2.$('#view').textContent.indexOf('累计交易额') >= 0);
+  check('客户表含当前欠款列', f2.$('#view').textContent.indexOf('当前欠款') >= 0);
+  var f2kw = f2.$('#custKw');
+  f2kw.value = '星辰'; f2.fire(f2kw, 'input');
+  check('客户搜索可过滤', f2.$$('#custBody tr[data-id]').length === 1, f2.$$('#custBody tr[data-id]').length);
+  f2kw.value = ''; f2.fire(f2kw, 'input');
+  f2.App.editCustomer();
+  check('新增客户弹窗打开', !!f2.$('#c_name'));
+  f2.$('#c_name').value = '测试批发部';
+  f2.$('#c_phone').value = '13512345678';
+  f2.App.saveCustomer('');
+  check('客户数变为 4', f2.DB.all('customers').length === 4, f2.DB.all('customers').length);
+  check('新客户字段落库', (function () {
+    var c = f2.DB.all('customers').filter(function (x) { return x.name === '测试批发部'; })[0];
+    return c && c.phone === '13512345678';
+  })());
+  var f2row = f2.DB.receivables().filter(function (r) { return !r.walkin; })[0];
+  var f2used = f2.DB.get('customers', f2row.id);
+  f2.App.delCustomer(f2used.id);
+  check('有交易记录的客户不能被硬删', f2.DB.all('customers').length === 4, f2.DB.all('customers').length);
+  check('被引用客户改为停用（archived）', f2.DB.get('customers', f2used.id).archived === true);
+  check('提示文案说明改为停用', f2.$('#toastWrap').textContent.indexOf('停用') >= 0, f2.$('#toastWrap').textContent);
+  check('停用后历史应收保持完整', (function () {
+    var r = f2.DB.receivables().filter(function (x) { return x.id === f2used.id; })[0];
+    return !!r && Math.abs(r.debt - f2row.debt) < 0.005;
+  })());
+  f2.go('customers');
+  check('客户列表标出停用状态', f2.$('#custBody').textContent.indexOf('停用') >= 0, f2.$('#custBody').textContent.slice(0, 300));
+  f2.go('pos');
+  check('停用客户不出现在开单下拉框', f2.$('#posCust').innerHTML.indexOf('value="' + f2used.id + '"') < 0);
+  f2.go('customers');
+  var f2fresh = f2.DB.all('customers').filter(function (c) { return c.name === '测试批发部'; })[0];
+  f2.App.delCustomer(f2fresh.id);
+  check('无交易客户可正常删除', f2.DB.all('customers').length === 3, f2.DB.all('customers').length);
+  check('客户管理全程无 JS 错误', f2.errors.length === 0, f2.errors.join(' | '));
+
+  section('F3 供应商档案管理（GAP-02）');
+  var f3 = boot({ hash: '#suppliers' });
+  check('供应商标题正确', f3.text('#viewTitle') === '供应商', f3.text('#viewTitle'));
+  check('供应商表格渲染 3 行', f3.$$('#supBody tr[data-id]').length === 3, f3.$$('#supBody tr[data-id]').length);
+  check('供应商表含当前应付列', f3.$('#view').textContent.indexOf('当前应付') >= 0);
+  f3.App.editSupplier();
+  check('新增供应商弹窗打开', !!f3.$('#s_name'));
+  f3.$('#s_name').value = '测试供货商';
+  f3.App.saveSupplier('');
+  check('供应商数变为 4', f3.DB.all('suppliers').length === 4, f3.DB.all('suppliers').length);
+  var f3used = f3.DB.all('suppliers').filter(function (s) {
+    return f3.DB.all('purchases').some(function (p) { return p.supplierId === s.id; });
+  })[0];
+  f3.App.delSupplier(f3used.id);
+  check('有进货记录的供应商不能被硬删', f3.DB.all('suppliers').length === 4, f3.DB.all('suppliers').length);
+  check('被引用供应商改为停用', f3.DB.get('suppliers', f3used.id).archived === true);
+  f3.App.openPurchaseForm();
+  check('停用供应商不出现在进货单下拉', f3.$('#puSup').innerHTML.indexOf('value="' + f3used.id + '"') < 0);
+  f3.App.closeModal();
+  check('供应商管理全程无 JS 错误', f3.errors.length === 0, f3.errors.join(' | '));
+
+  section('F3b 开单页快速建档客户（GAP-02）');
+  var f3b = boot({ hash: '#pos' });
+  var f3sel = f3b.$('#posCust');
+  check('开单下拉含「新增客户」入口', f3sel.textContent.indexOf('新增客户') >= 0, f3sel.textContent);
+  f3sel.value = '__new__'; f3b.fire(f3sel, 'change');
+  check('选中后弹出建档窗', !!f3b.$('#c_name'));
+  f3b.$('#c_name').value = '现场新客户';
+  f3b.App.saveCustomer('', true);
+  var f3nc = f3b.DB.all('customers').filter(function (c) { return c.name === '现场新客户'; })[0];
+  check('新客户已落库', !!f3nc);
+  check('新客户自动选中到开单页', f3nc && f3b.$('#posCust').value === f3nc.id, f3b.$('#posCust').value);
+  check('快速建档无 JS 错误', f3b.errors.length === 0, f3b.errors.join(' | '));
+
+  section('F4 采购付款入口 + 状态文案（MNR-02 / MNR-06）');
+  var f4 = boot({ hash: '#purchase' });
+  var f4o = f4.DB.all('purchases').filter(function (p) { return p.total - p.paid > 0.005; })[0];
+  var f4oid = f4o.id, f4paid0 = f4o.paid;
+  var f4txt = f4.$('#view').textContent;
+  check('采购列表用付款口径文案', /未付|部分付|已付清/.test(f4txt), f4txt.slice(0, 200));
+  check('采购列表不再出现收款口径文案', f4txt.indexOf('已结清') < 0 && f4txt.indexOf('部分收') < 0, f4txt.slice(0, 200));
+  f4.App.openPurchase(f4oid);
+  check('未付进货单详情有付款按钮', f4.$('#modalFoot').textContent.indexOf('付款') >= 0, f4.$('#modalFoot').textContent);
+  f4.App.payPurchase(f4oid);
+  check('付款弹窗有金额输入框', !!f4.$('#ppAmt'));
+  var f4payN = f4.DB.all('finance').filter(function (x) { return x.type === 'pay'; }).length;
+  var f4payable0 = f4.DB.payables().reduce(function (a, x) { return a + x.unpaid; }, 0);
+  f4.$('#ppAmt').value = '100';
+  f4.App.doPayPurchase(f4oid);
+  check('进货单已付 +100', Math.abs(f4.DB.get('purchases', f4oid).paid - (f4paid0 + 100)) < 0.005, f4.DB.get('purchases', f4oid).paid);
+  check('财务新增 pay 流水', f4.DB.all('finance').filter(function (x) { return x.type === 'pay'; }).length === f4payN + 1);
+  check('应付总额减少 100',
+    Math.abs(f4payable0 - 100 - f4.DB.payables().reduce(function (a, x) { return a + x.unpaid; }, 0)) < 0.005,
+    f4.DB.payables().reduce(function (a, x) { return a + x.unpaid; }, 0));
+  f4.App.openPurchase(f4oid);
+  check('状态标签显示部分付', f4.$('#modalBody').textContent.indexOf('部分付') >= 0, f4.$('#modalBody').textContent.slice(0, 140));
+  check('超额付款只记实际未付部分', (function () {
+    var left = f4.DB.round2(f4.DB.get('purchases', f4oid).total - f4.DB.get('purchases', f4oid).paid);
+    f4.App.payPurchase(f4oid);
+    f4.$('#ppAmt').value = String(left + 5000);
+    f4.App.doPayPurchase(f4oid);
+    var o = f4.DB.get('purchases', f4oid);
+    return Math.abs(o.paid - o.total) < 0.005;
+  })(), f4.DB.get('purchases', f4oid).paid);
+  check('付清后状态为已付清', f4.DB.orderStatus(f4.DB.get('purchases', f4oid)) === 'paid');
+  check('采购付款全程无 JS 错误', f4.errors.length === 0, f4.errors.join(' | '));
+
+  section('F5 销售筛选 / 库存搜索 / POS 搜索对齐（MNR-03/07/08）');
+  var f5 = boot({ hash: '#sales' });
+  check('销售列表有状态筛选', !!f5.$('#saStatus'));
+  check('销售列表有日期范围筛选', !!f5.$('#saRange'));
+  check('销售列表有关键字搜索', !!f5.$('#saKw'));
+  check('默认显示全部销售单', f5.$$('#saleBody tr[data-id]').length === f5.DB.all('sales').length,
+    f5.$$('#saleBody tr[data-id]').length + ' vs ' + f5.DB.all('sales').length);
+  f5.$('#saStatus').value = 'unpaid'; f5.fire(f5.$('#saStatus'), 'change');
+  var f5unpaid = f5.DB.all('sales').filter(function (s) { return f5.DB.orderStatus(s) === 'unpaid'; }).length;
+  check('选「欠款」只剩未收款单', f5.$$('#saleBody tr[data-id]').length === f5unpaid,
+    f5.$$('#saleBody tr[data-id]').length + ' vs ' + f5unpaid);
+  f5.$('#saStatus').value = 'open'; f5.fire(f5.$('#saStatus'), 'change');
+  var f5open = f5.DB.receivables().reduce(function (a, r) { return a + r.orders; }, 0);
+  check('选「未结清」条数 = 财务应收笔数', f5.$$('#saleBody tr[data-id]').length === f5open,
+    f5.$$('#saleBody tr[data-id]').length + ' vs ' + f5open);
+  f5.$('#saStatus').value = 'all'; f5.fire(f5.$('#saStatus'), 'change');
+  f5.$('#saRange').value = 'today'; f5.fire(f5.$('#saRange'), 'change');
+  var f5today = f5.DB.all('sales').filter(function (s) { return s.date === f5.DB.todayStr(); }).length;
+  check('选「今日」只剩今天的单', f5.$$('#saleBody tr[data-id]').length === f5today,
+    f5.$$('#saleBody tr[data-id]').length + ' vs ' + f5today);
+  f5.$('#saRange').value = 'all'; f5.fire(f5.$('#saRange'), 'change');
+  f5.$('#saKw').value = '利民'; f5.fire(f5.$('#saKw'), 'input');
+  var f5kwN = f5.DB.all('sales').filter(function (s) { return (s.customerName || '').indexOf('利民') >= 0; }).length;
+  check('客户关键字过滤生效', f5.$$('#saleBody tr[data-id]').length === f5kwN,
+    f5.$$('#saleBody tr[data-id]').length + ' vs ' + f5kwN);
+  check('筛选组合不产生 JS 错误', f5.errors.length === 0, f5.errors.join(' | '));
+
+  var f5b = boot({ hash: '#inventory' });
+  check('库存页有搜索框', !!f5b.$('#invKw'));
+  check('库存页有「只看预警」开关', !!f5b.$('#invLowOnly'));
+  check('库存默认显示全部商品', f5b.$$('#invBody tr[data-pid]').length === f5b.DB.all('products').length,
+    f5b.$$('#invBody tr[data-pid]').length);
+  f5b.$('#invKw').value = '海尔'; f5b.fire(f5b.$('#invKw'), 'input');
+  var f5hair = f5b.DB.all('products').filter(function (p) {
+    return (p.name + p.brand + p.model + p.type).indexOf('海尔') >= 0;
+  }).length;
+  check('库存搜索「海尔」只剩海尔商品', f5b.$$('#invBody tr[data-pid]').length === f5hair,
+    f5b.$$('#invBody tr[data-pid]').length + ' vs ' + f5hair);
+  f5b.$('#invKw').value = ''; f5b.fire(f5b.$('#invKw'), 'input');
+  var f5low = f5b.$('#invLowOnly'); f5low.checked = true; f5b.fire(f5low, 'change');
+  check('「只看预警」行数 = 预警商品数', f5b.$$('#invBody tr[data-pid]').length === f5b.DB.stockWarnings().length,
+    f5b.$$('#invBody tr[data-pid]').length + ' vs ' + f5b.DB.stockWarnings().length);
+
+  var f5c = boot({ hash: '#pos' });
+  var f5vis = function () {
+    return f5c.$$('#posGrid .prod-card').filter(function (c) { return c.style.display !== 'none'; });
+  };
+  f5c.$('#posKw').value = 'BCD-216STPT'; f5c.fire(f5c.$('#posKw'), 'input');
+  check('POS 可按型号搜索', f5vis().length === 1, f5vis().length);
+  f5c.$('#posKw').value = '洗衣机'; f5c.fire(f5c.$('#posKw'), 'input');
+  check('POS 可按类型搜索', f5vis().length === 1, f5vis().length);
+
+  section('F6 图表与代码整洁（MNR-01/04/09/10）');
+  var f6 = boot({ hash: '#reports' });
+  var f6svg = f6.$('#view svg.chart');
+  check('图表等比缩放（不再拉伸变形）', f6svg.getAttribute('preserveAspectRatio') === 'xMidYMid meet',
+    f6svg.getAttribute('preserveAspectRatio'));
+  var f6cost = {};
+  f6.DB.all('purchases').forEach(function (p) { p.items.forEach(function (it) { f6cost[it.productId] = it.price; }); });
+  var f6miss = {};
+  f6.DB.all('sales').forEach(function (s) {
+    s.items.forEach(function (it) { if (!f6cost[it.productId]) f6miss[it.productId] = 1; });
+  });
+  var f6missN = Object.keys(f6miss).length;
+  check('毛利卡片标注无成本商品数（' + f6missN + ' 种）',
+    f6missN > 0 ? f6.$('#view').textContent.indexOf(f6missN + ' 种商品无采购成本') >= 0 : true,
+    f6.$('#view').textContent.slice(0, 500));
+  var appSrc = helpers.read('assets/app.js');
+  check('app.js 不再挂临时全局 window.__*', appSrc.indexOf('window.__') < 0);
+  check('app.js 已删除重复的 custOpts 死代码', (appSrc.match(/var custOpts/g) || []).length === 1,
+    (appSrc.match(/var custOpts/g) || []).length);
+  check('CSS 声明图表高度自适应', /\.chart\s*\{[^}]*height\s*:\s*auto/.test(helpers.read('assets/style.css')));
+  check('报表页渲染无 JS 错误', f6.errors.length === 0, f6.errors.join(' | '));
+}
+
+/** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */
+function fmt(n) {
+  return '¥' + Number(n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 module.exports = { run: run };

@@ -80,7 +80,7 @@ function boot(opts) {
     /** 切换路由并同步执行渲染（jsdom 的 hashchange 是异步派发的） */
     go: function (id) {
       window.location.hash = '#' + id;
-      window.App.__route ? window.App.__route() : window.dispatchEvent(new window.Event('hashchange'));
+      window.App.routeSync ? window.App.routeSync() : window.dispatchEvent(new window.Event('hashchange'));
     },
     $: function (sel) { return window.document.querySelector(sel); },
     $$: function (sel) { return Array.prototype.slice.call(window.document.querySelectorAll(sel)); },
