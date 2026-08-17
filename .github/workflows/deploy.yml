@@ -31,16 +31,6 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
-          # 只发布纯前端运行时所需文件；排除依赖符号链接与开发资产
-          exclude: |
-            node_modules
-            tests
-            docs
-            .github
-            .gitignore
-            PRD.md
-            DEV_PLAN.md
-            README.md
 
       - name: Deploy
         id: deployment
