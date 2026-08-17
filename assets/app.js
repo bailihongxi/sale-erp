@@ -371,11 +371,51 @@
   window.App.openBatchImport = function () {
     var sample = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存\n美的空调 KFR-35GW,美的,KFR-35GW,空调,空调,台,1899,2299,10,20\n九阳豆浆机 JYDZ,九阳,JYDZ,小家电,厨电,台,199,299,5,30';
     var body =
+      '<div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn--sm" onclick="App.fillCsvTemplate()">📋 填入模板示例</button>' +
+      '<button class="btn btn--sm" onclick="App.downloadCsvTemplate()">📄 下载 CSV 模板</button>' +
+      '<span class="muted" style="font-size:12px;align-self:center">填入示例可直接参考格式修改，下载模板可离线编辑后粘贴</span>' +
+      '</div>' +
       '<div class="field"><label>粘贴 CSV / TSV / JSON</label><textarea id="batchArea" rows="10" placeholder="' + esc(sample) + '"></textarea></div>' +
       '<div class="muted" style="font-size:12px;margin-top:6px">支持 CSV（逗号分隔，可含表头）、TSV（制表符分隔）或 JSON 数组。表头可用「商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存」或对应英文 key；无表头时按此顺序解析。</div>';
     openModal('批量导入商品', body,
       '<button class="btn" onclick="App.closeModal()">取消</button>' +
       '<button class="btn btn--primary" onclick="App.doBatchImport()">开始导入</button>');
+  };
+
+  /** 生成商品批量导入 CSV 模板文本（表头 + 2 行示例，不含 BOM） */
+  function csvTemplateText() {
+    var header = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存';
+    var rows = [
+      '示例-美的空调,美的,KFR-35GW,空调,空调,台,1899,2299,10,20',
+      '示例-九阳豆浆机,九阳,JYDZ,小家电,厨电,台,199,299,5,30'
+    ];
+    return header + '\n' + rows.join('\n') + '\n';
+  }
+
+  /** 将 CSV 模板示例填入批量导入文本框，方便用户直接参考修改 */
+  window.App.fillCsvTemplate = function () {
+    var area = $('#batchArea');
+    if (!area) return;
+    area.value = csvTemplateText();
+    area.focus();
+    area.select();
+    toast('已填入模板示例，请修改后导入', 'ok');
+  };
+
+  /** 下载商品批量导入 CSV 模板（含表头 + 2 行示例，带 BOM 防 Excel 乱码） */
+  window.App.downloadCsvTemplate = function () {
+    var csv = '\uFEFF' + csvTemplateText();
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = '商品批量导入模板.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 100);
+    toast('模板已下载', 'ok');
   };
   window.App.doBatchImport = function () {
     var raw = ($('#batchArea') && $('#batchArea').value) || '';

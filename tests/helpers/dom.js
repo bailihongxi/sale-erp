@@ -23,6 +23,23 @@ function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
 var _jsdom = null;
 function jsdom() {
   if (_jsdom) return _jsdom;
+  // 兼容 Node v20 缺少 worker_threads.markAsUncloneable（undici/jsdom 30 依赖）
+  try {
+    var undiciWebidl = require('undici/lib/web/webidl');
+    if (undiciWebidl && undiciWebidl.webidl && undiciWebidl.webidl.util &&
+        typeof undiciWebidl.webidl.util.markAsUncloneable !== 'function') {
+      undiciWebidl.webidl.util.markAsUncloneable = function () {};
+    }
+  } catch (e) { /* 无此包则跳过 */ }
+  // 兼容 webidl-conversions 8.x（移除了 util.markAsUncloneable），jsdom 30 仍依赖它
+  try {
+    var webidl = require('webidl-conversions');
+    if (!webidl.util) {
+      webidl.util = { markAsUncloneable: function () {} };
+    } else if (typeof webidl.util.markAsUncloneable !== 'function') {
+      webidl.util.markAsUncloneable = function () {};
+    }
+  } catch (e) { /* 无此包则跳过 */ }
   try { _jsdom = require('jsdom'); }
   catch (e) {
     var hint = '\n未找到 jsdom。请在项目根目录执行：npm install\n';

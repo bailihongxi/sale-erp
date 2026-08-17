@@ -629,6 +629,44 @@ async function run() {
   check('批量导入全程无 JS 错误', i1.errors.length + i1b.errors.length + i1c.errors.length === 0,
     [i1.errors, i1b.errors, i1c.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
+  section('I1b 批量导入模板按钮（填入 + 下载）');
+  var i1t = boot({ hash: '#products' });
+  i1t.App.openBatchImport();
+  check('导入弹窗含「填入模板示例」按钮', /填入模板示例/.test(i1t.$('#modalBody').textContent));
+  check('导入弹窗含「下载 CSV 模板」按钮', /下载 CSV 模板/.test(i1t.$('#modalBody').textContent));
+  check('App.fillCsvTemplate 函数存在', typeof i1t.App.fillCsvTemplate === 'function');
+  check('App.downloadCsvTemplate 函数存在', typeof i1t.App.downloadCsvTemplate === 'function');
+  // 填入模板：文本框初始为空，调用后有内容
+  check('填入前文本框为空', i1t.$('#batchArea').value === '');
+  i1t.App.fillCsvTemplate();
+  var filled = i1t.$('#batchArea').value;
+  check('填入后文本框含表头行', filled.indexOf('商品名称,品牌,型号') >= 0, filled.slice(0, 80));
+  check('填入后文本框含示例数据行', filled.indexOf('示例-美的空调') >= 0 && filled.indexOf('示例-九阳豆浆机') >= 0);
+  check('填入后内容可被 doBatchImport 正常解析（含2个示例商品）', (function () {
+    var before = i1t.DB.all('products').length;
+    i1t.App.doBatchImport();
+    return i1t.DB.all('products').length === before + 2;
+  })(), '导入后商品数=' + i1t.DB.all('products').length);
+  // 下载模板：jsdom 中 Blob 可能未实现，做兼容打桩，仅验证不报错
+  var origBlob2 = i1t.window.Blob;
+  if (typeof origBlob2 !== 'function') {
+    i1t.window.Blob = function (parts, opts) { this.parts = parts; this.opts = opts; };
+  }
+  var dlClicked = false;
+  var origCreate2 = i1t.window.URL.createObjectURL;
+  i1t.window.URL.createObjectURL = function () { return 'blob:template-test'; };
+  var origCreateEl2 = i1t.document.createElement.bind(i1t.document);
+  i1t.document.createElement = function (tag) {
+    var el = origCreateEl2(tag);
+    if (tag === 'a') { el.click = function () { dlClicked = true; }; }
+    return el;
+  };
+  i1t.App.downloadCsvTemplate();
+  check('下载模板触发了点击', dlClicked);
+  i1t.document.createElement = origCreateEl2;
+  i1t.window.URL.createObjectURL = origCreate2;
+  check('模板功能全程无 JS 错误', i1t.errors.length === 0, i1t.errors.join(' | '));
+
   section('I2 销售开单结算与搜索位置互换');
   var i2 = boot({ hash: '#pos' });
   var posEl = i2.$('.pos');
