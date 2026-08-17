@@ -4,6 +4,7 @@
 > **基线版本**：git `29c1cc2`（v1 已实现，1624 行代码）
 > **计划周期**：约 5 个工作日（40 人时），分 5 个 Sprint
 > **使用方式**：按 §8「逐日执行顺序」自上而下做；每完成一个任务卡，跑该卡的「验收命令」，通过后按 §6 约定提交。
+> **执行状态（2026-08-17）**：Sprint 0–4 全部完成，318 项自动化断言全绿；GitHub Pages 已上线 `https://bailihongxi.github.io/sale-erp/`；已打 `v1.1` 标签。手机端验收见 `docs/mobile-check.md`。
 
 ---
 
@@ -88,7 +89,7 @@ Sprint 4  部署与手机验收     0.5 天   GitHub Pages 首发 · 手机实�
 
 ## 4. 任务卡（可直接执行）
 
-### Sprint 0 · 工程化底座（0.5 天 / 4 人时）
+### Sprint 0 · 工程化底座（0.5 天 / 4 人时） ✅ 已完成
 
 ---
 
@@ -176,7 +177,7 @@ git mv design docs/archive/design-prototype-v0
 
 ---
 
-### Sprint 1 · P0 缺陷修复（1.5 天 / 12 人时）
+### Sprint 1 · P0 缺陷修复（1.5 天 / 12 人时） ✅ 已完成
 
 > 每张卡都遵循同一节奏：**先在 `db.spec.js`/`ui.spec.js` 写一条会失败的断言 → 改代码 → 断言转绿 → 全量 `npm test`**。
 
@@ -461,7 +462,7 @@ console.log('原顺序未被污染:', D.all('products')[0].id===first);"
 
 ---
 
-### Sprint 2 · v1 验收补齐（1.5 天 / 12 人时）
+### Sprint 2 · v1 验收补齐（1.5 天 / 12 人时） ✅ 已完成
 
 ---
 
@@ -565,7 +566,7 @@ if (DB.all('sales').some(s => s.customerId === id)) {
 
 ---
 
-### Sprint 3 · 投产可用性（1 天 / 8 人时）
+### Sprint 3 · 投产可用性（1 天 / 8 人时） ✅ 已完成
 
 ---
 
@@ -630,7 +631,7 @@ var origin = location.protocol === 'file:' ? '本机文件(file://)' : location.
 
 ---
 
-### Sprint 4 · 部署与手机验收（0.5 天 / 4 人时）
+### Sprint 4 · 部署与手机验收（0.5 天 / 4 人时） ✅ 已完成
 
 ---
 
@@ -684,7 +685,7 @@ gh run watch
 
 ---
 
-## 5. Backlog（v1.2+，本次不做）
+## 5. Backlog（v1.2+，v1.1 已发布，本表为后续迭代）
 
 | 优先级 | 项 | 说明 |
 |---|---|---|
@@ -758,6 +759,8 @@ npm run check && npm test
 | **D5 下午** | S3-03 · S3-04 · S4-01 · S4-02 · S4-03 | 快照护栏、空态引导、Pages 首发、手机验收、文档收口 | 线上可访问，打 `v1.1` 标签 |
 
 **工作量汇总**：Sprint 0 = 4h ｜ Sprint 1 = 12h ｜ Sprint 2 = 12h ｜ Sprint 3 = 8h ｜ Sprint 4 = 4h ｜ **合计 40 人时**
+
+> **结果（2026-08-17）**：D1–D5 全部执行完毕。最终 `318 passed, 0 failed`；GitHub Pages 站点可访问（已验证 `index.html` 与 `assets/*` 均 200、无 404）；已打 `v1.1` 标签并推送。
 
 ---
 

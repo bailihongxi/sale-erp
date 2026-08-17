@@ -35,6 +35,18 @@ python3 -m http.server 8080
 > 数据只存在**当前这台 Mac 的这个浏览器**里。换浏览器 / 清缓存 / 换电脑都不会带走，
 > 请用「数据管理 → 导出备份」定期备份。
 
+## 开发 & 测试（可选）
+
+仓库自带零依赖的 npm 脚本（需 Node 环境）：
+
+```bash
+npm run serve    # 启动本地静态服务 http://localhost:8080
+npm run check    # 语法门禁（node --check assets/*.js）
+npm test         # 跑 318 项自动化断言（数据层 + 界面层，jsdom）
+```
+
+> 这些脚本仅用于本地开发与回归验证；最终产品是纯静态文件，双击 `index.html` 即可用，无需 Node。
+
 ## 部署到 GitHub Pages（联网 + 手机访问）
 
 本仓库已内置 GitHub Actions 工作流（`.github/workflows/deploy.yml`），推送即自动发布：
@@ -49,6 +61,8 @@ python3 -m http.server 8080
 3. 仓库 → Settings → Pages → Source 选择 **GitHub Actions**。
 4. 推送后会自动部署，几分钟后得到 `https://你的用户名.github.io/appliance-erp/` 网址。
 5. 手机用浏览器打开该网址即可使用（手机端以查看数据为主，底部有「工作台/商品/库存/我的」）。
+
+> 本仓库已发布的演示站点：`https://bailihongxi.github.io/sale-erp/`（数据保存在你自己的浏览器本地，与他人互不相通）。
 
 > 说明：Mac 与手机是**两套独立数据、互不同步**。想把 Mac 的数据搬到手机，
 > 在 Mac 上「导出备份」下载 JSON，再到手机「导入备份」即可。
