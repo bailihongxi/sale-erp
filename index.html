@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#2D5BE3" />
+  <title>家电批发进销存 ERP</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边栏（桌面） -->
+    <aside class="sidebar">
+      <div class="brand"><span class="logo">🏬</span><span id="brandName">家电批发中心</span></div>
+      <nav class="nav" id="nav"></nav>
+      <div class="sidebar__foot">纯本地运行 · 数据不丢失<br/>v1.0</div>
+    </aside>
+
+    <!-- 主区 -->
+    <div class="main">
+      <header class="topbar">
+        <h1 id="viewTitle">工作台</h1>
+        <div class="spacer"></div>
+        <span class="shop hide-mobile" id="shopName">家电批发中心</span>
+        <button class="btn btn--sm" onclick="location.hash='#data'">💾 备份</button>
+      </header>
+      <main class="content" id="view"></main>
+    </div>
+  </div>
+
+  <!-- 手机底部导航 -->
+  <div class="bottom-nav" id="bottomNav"></div>
+
+  <!-- 弹窗 -->
+  <div class="modal-mask" id="modalMask">
+    <div class="modal" id="modal">
+      <div class="modal__head"><h3 id="modalTitle">标题</h3><button class="modal__close" onclick="App.closeModal()">×</button></div>
+      <div class="modal__body" id="modalBody"></div>
+      <div class="modal__foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <!-- 手机「我的」底部弹出菜单 -->
+  <div class="sheet-mask" id="sheetMask">
+    <div class="sheet" id="sheet">
+      <div class="sheet__title">全部功能</div>
+      <nav class="nav" id="sheetNav"></nav>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script src="assets/db.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

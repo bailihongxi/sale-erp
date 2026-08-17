@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>云器 ERP · 电器批发零售管理系统</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+<div class="backdrop"></div>
+
+<div class="app">
+  <!-- ============ 侧边栏 ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand__logo">云</div>
+      <div>
+        <div class="brand__name">云器 ERP</div>
+        <div class="brand__sub">电器批发零售</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav__group">
+        <div class="nav__item active" data-target="dashboard">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span class="nav__label">工作台</span>
+        </div>
+      </div>
+
+      <div class="nav__group">
+        <div class="nav__group-title">进销存业务</div>
+        <div class="nav__item" data-target="pos">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.2 12.5a1.5 1.5 0 0 0 1.5 1.2h8.8a1.5 1.5 0 0 0 1.5-1.2L22 7H6"/></svg>
+          <span class="nav__label">销售开单</span>
+          <span class="nav__badge">12</span>
+        </div>
+        <div class="nav__item" data-target="products">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
+          <span class="nav__label">商品管理</span>
+        </div>
+        <div class="nav__item" data-target="purchase">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg>
+          <span class="nav__label">采购管理</span>
+        </div>
+        <div class="nav__item" data-target="sales">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h6M9 16h6M9 8h3"/></svg>
+          <span class="nav__label">销售管理</span>
+        </div>
+        <div class="nav__item" data-target="inventory">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5M3 18l9 5 9-5" opacity=".55"/></svg>
+          <span class="nav__label">库存管理</span>
+        </div>
+      </div>
+
+      <div class="nav__group">
+        <div class="nav__group-title">分析决策</div>
+        <div class="nav__item" data-target="report">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+          <span class="nav__label">报表分析</span>
+        </div>
+      </div>
+
+      <div class="nav__group">
+        <div class="nav__group-title">财务 · 系统</div>
+        <div class="nav__item" data-target="finance">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/></svg>
+          <span class="nav__label">财务管理</span>
+        </div>
+        <div class="nav__item" data-target="settings">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 0 0-1.7-1L16.5 3h-4l-.4 2.6a7 7 0 0 0-1.7 1l-2.3-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7 7 0 0 0 1.7-1l2.3 1 2-3.4-2-1.5a7 7 0 0 0 .1-1z"/></svg>
+          <span class="nav__label">系统设置</span>
+        </div>
+        <div class="nav__item" data-target="data">
+          <svg class="nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          <span class="nav__label">数据管理</span>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ============ 主区域 ============ -->
+  <div class="main">
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <button class="topbar__toggle" aria-label="切换菜单">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="topbar__crumb">工作台 <small id="crumbSub">经营概览与待办</small></div>
+
+      <div class="search">
+        <svg class="search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+        <input type="text" placeholder="搜索商品、订单、客户、单据…" />
+        <span class="search__kbd">⌘K</span>
+      </div>
+
+      <div class="topbar__actions">
+        <button class="icon-btn" title="帮助">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg>
+        </button>
+        <button class="icon-btn" title="消息">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4z"/></svg>
+          <span class="dot"></span>
+        </button>
+        <div class="user">
+          <div class="user__avatar">林</div>
+          <div class="user__meta">
+            <div class="user__name">林晓</div>
+            <div class="user__role">店长 · 总仓</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- 面包屑用于 JS 更新 -->
+      <h1 id="crumb" style="display:none">工作台</h1>
+
+      <!-- ================= 工作台 ================= -->
+      <section class="view active" data-view="dashboard">
+        <div class="page-head">
+          <div>
+            <h1>工作台</h1>
+            <p>下午好，林晓 👋 今天是 2026-08-17，门店经营平稳。</p>
+          </div>
+          <div class="page-head__actions">
+            <button class="btn btn--ghost btn--sm">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>导出日报
+            </button>
+            <button class="btn btn--primary btn--sm" onclick="document.querySelector('[data-target=pos]').click()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>立即开单
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi__top">
+              <div class="kpi__icon kpi__icon--blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M7 7h7a3 3 0 0 1 0 6H7m0 0h8"/></svg></div>
+              <span class="kpi__trend up">▲ 12.5%</span>
+            </div>
+            <div class="kpi__label">今日销售额</div>
+            <div class="kpi__value">¥86,420<span class="unit">.50</span></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi__top">
+              <div class="kpi__icon kpi__icon--orange"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.2 12.5a1.5 1.5 0 0 0 1.5 1.2h8.8a1.5 1.5 0 0 0 1.5-1.2L22 7H6"/></svg></div>
+              <span class="kpi__trend up">▲ 8 单</span>
+            </div>
+            <div class="kpi__label">今日订单数</div>
+            <div class="kpi__value">128</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi__top">
+              <div class="kpi__icon kpi__icon--red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4m0 4h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
+              <span class="kpi__trend down">需处理</span>
+            </div>
+            <div class="kpi__label">库存预警</div>
+            <div class="kpi__value">9<span class="unit">款</span></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi__top">
+              <div class="kpi__icon kpi__icon--green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg></div>
+              <span class="kpi__trend flat">−3.1%</span>
+            </div>
+            <div class="kpi__label">应收账款</div>
+            <div class="kpi__value">¥152,800</div>
+          </div>
+        </div>
+
+        <!-- 图表 + 侧栏 -->
+        <div class="cols-8-4 mt-5">
+          <div class="card">
+            <div class="card__head">
+              <div class="card__title">近 14 天销售趋势</div>
+              <div class="seg">
+                <button class="active">日</button><button>周</button><button>月</button>
+              </div>
+            </div>
+            <div class="card__body">
+              <svg viewBox="0 0 720 260" width="100%" height="260" role="img" aria-label="销售趋势折线图">
+                <defs>
+                  <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#2d5be3" stop-opacity=".18"/>
+                    <stop offset="1" stop-color="#2d5be3" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <g stroke="#eef1f6" stroke-width="1">
+                  <line x1="20" y1="60" x2="700" y2="60"/><line x1="20" y1="110" x2="700" y2="110"/>
+                  <line x1="20" y1="160" x2="700" y2="160"/><line x1="20" y1="210" x2="700" y2="210"/>
+                </g>
+                <path d="M20,200 L80,170 L140,185 L200,140 L260,150 L320,110 L380,130 L440,90 L500,105 L560,70 L620,85 L680,55 L680,240 L20,240 Z" fill="url(#area)"/>
+                <path d="M20,200 L80,170 L140,185 L200,140 L260,150 L320,110 L380,130 L440,90 L500,105 L560,70 L620,85 L680,55" fill="none" stroke="#2d5be3" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <g fill="#2d5be3">
+                  <circle cx="200" cy="140" r="3.5"/><circle cx="440" cy="90" r="3.5"/><circle cx="680" cy="55" r="4"/>
+                </g>
+                <g fill="#9aa4b2" font-size="11" font-family="sans-serif">
+                  <text x="16" y="214">0</text><text x="16" y="164">30k</text><text x="16" y="114">60k</text><text x="16" y="64">90k</text>
+                  <text x="60" y="256">08-04</text><text x="300" y="256">08-10</text><text x="560" y="256">08-16</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head"><div class="card__title">待办事项</div><span class="card__more">全部</span></div>
+            <div class="card__body">
+              <div class="feed">
+                <div class="feed__item">
+                  <div class="feed__thumb" style="color:var(--c-danger)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4m0 4h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
+                  <div class="feed__main"><div class="feed__title">9 款商品库存低于安全线</div><div class="feed__sub">海尔冰箱 BCD-501 仅剩 3 台</div></div>
+                  <span class="tag tag--danger">紧急</span>
+                </div>
+                <div class="feed__item">
+                  <div class="feed__thumb" style="color:var(--c-warning)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg></div>
+                  <div class="feed__main"><div class="feed__title">3 笔采购单待入库</div><div class="feed__sub">美的广州仓 · 预计到货今日</div></div>
+                  <span class="tag tag--warning">待办</span>
+                </div>
+                <div class="feed__item">
+                  <div class="feed__thumb" style="color:var(--c-primary-600)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+                  <div class="feed__main"><div class="feed__title">5 家客户欠款待催收</div><div class="feed__sub">合计 ¥152,800</div></div>
+                  <span class="tag tag--info">跟进</span>
+                </div>
+                <div class="feed__item">
+                  <div class="feed__thumb" style="color:var(--c-success)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg></div>
+                  <div class="feed__main"><div class="feed__title">月度盘点已完成</div><div class="feed__sub">盘盈 12 件 · 盘亏 3 件</div></div>
+                  <span class="tag tag--success">完成</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 热销 + 品类 -->
+        <div class="cols-7-5 mt-5">
+          <div class="card">
+            <div class="card__head"><div class="card__title">热销商品 TOP 5</div><span class="card__more">查看榜单</span></div>
+            <div class="card__body" style="padding-top:8px">
+              <table class="table">
+                <thead><tr><th>商品</th><th>分类</th><th>销量</th><th>销售额</th><th>趋势</th></tr></thead>
+                <tbody>
+                  <tr><td class="cell-strong">美的 变频空调 KFR-35</td><td><span class="tag tag--gray">大家电</span></td><td class="cell-num">42</td><td class="cell-num">¥125,600</td><td><span class="kpi__trend up" style="margin:0">▲ 18%</span></td></tr>
+                  <tr><td class="cell-strong">海尔 对开门冰箱 501L</td><td><span class="tag tag--gray">大家电</span></td><td class="cell-num">31</td><td class="cell-num">¥186,300</td><td><span class="kpi__trend up" style="margin:0">▲ 9%</span></td></tr>
+                  <tr><td class="cell-strong">小米 电视 65" Pro</td><td><span class="tag tag--gray">3C数码</span></td><td class="cell-num">58</td><td class="cell-num">¥174,000</td><td><span class="kpi__trend flat" style="margin:0">— 0%</span></td></tr>
+                  <tr><td class="cell-strong">九阳 破壁机 Y1</td><td><span class="tag tag--gray">厨卫</span></td><td class="cell-num">96</td><td class="cell-num">¥38,400</td><td><span class="kpi__trend up" style="margin:0">▲ 22%</span></td></tr>
+                  <tr><td class="cell-strong">戴森 V12 吸尘器</td><td><span class="tag tag--gray">小家电</span></td><td class="cell-num">27</td><td class="cell-num">¥89,100</td><td><span class="kpi__trend down" style="margin:0">▼ 4%</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head"><div class="card__title">品类销售占比</div></div>
+            <div class="card__body">
+              <svg viewBox="0 0 220 220" width="180" height="180" style="display:block;margin:0 auto">
+                <circle cx="110" cy="110" r="80" fill="none" stroke="#eef1f6" stroke-width="26"/>
+                <circle cx="110" cy="110" r="80" fill="none" stroke="#2d5be3" stroke-width="26" stroke-dasharray="201 301" transform="rotate(-90 110 110)"/>
+                <circle cx="110" cy="110" r="80" fill="none" stroke="#ff7a33" stroke-width="26" stroke-dasharray="120 382" stroke-dashoffset="-201" transform="rotate(-90 110 110)"/>
+                <circle cx="110" cy="110" r="80" fill="none" stroke="#16a34a" stroke-width="26" stroke-dasharray="90 392" stroke-dashoffset="-321" transform="rotate(-90 110 110)"/>
+                <circle cx="110" cy="110" r="80" fill="none" stroke="#7d8794" stroke-width="26" stroke-dasharray="70 402" stroke-dashoffset="-411" transform="rotate(-90 110 110)"/>
+                <text x="110" y="104" text-anchor="middle" font-size="22" font-weight="800" fill="#0f1b2d" font-family="sans-serif">¥613k</text>
+                <text x="110" y="126" text-anchor="middle" font-size="12" fill="#7d8794" font-family="sans-serif">本月销售</text>
+              </svg>
+              <div class="mt-4">
+                <div class="mini-stat"><span class="k"><span class="dot" style="background:#2d5be3"></span> 大家电</span><span class="v">40%</span></div>
+                <div class="mini-stat"><span class="k"><span class="dot" style="background:#ff7a33"></span> 厨卫电器</span><span class="v">24%</span></div>
+                <div class="mini-stat"><span class="k"><span class="dot" style="background:#16a34a"></span> 生活小家电</span><span class="v">18%</span></div>
+                <div class="mini-stat"><span class="k"><span class="dot" style="background:#7d8794"></span> 3C 数码</span><span class="v">14%</span></div>
+                <div class="mini-stat"><span class="k">其他</span><span class="v">4%</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 销售开单 ================= -->
+      <section class="view" data-view="pos">
+        <div class="page-head">
+          <div><h1>销售开单</h1><p>支持零售收银、批发多单位、扫码枪快速录入</p></div>
+          <div class="page-head__actions">
+            <div class="seg"><button class="active">零售</button><button>批发</button><button>退换货</button></div>
+          </div>
+        </div>
+
+        <div class="pos">
+          <!-- 左：分类 -->
+          <div class="pos__col">
+            <div class="pos__col-head">商品分类</div>
+            <div class="pos__col-body">
+              <div class="cat-list">
+                <div class="cat-item active">全部商品 <span class="cnt">1,286</span></div>
+                <div class="cat-item">大家电 <span class="cnt">312</span></div>
+                <div class="cat-item">厨卫电器 <span class="cnt">268</span></div>
+                <div class="cat-item">生活小家电 <span class="cnt">455</span></div>
+                <div class="cat-item">3C 数码 <span class="cnt">251</span></div>
+                <div class="cat-item">配件耗材 <span class="cnt">84</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 中：商品检索 + 列表 -->
+          <div class="pos__col">
+            <div class="pos__col-head">
+              <span>选择商品</span>
+              <span class="tag tag--info" id="cartHint">已选 <b id="cartCount">0</b> 件</span>
+            </div>
+            <div class="pos__col-body">
+              <div class="pos-search">
+                <input class="input" placeholder="输入名称 / 条码 / 拼音首字母，或按 ⏎ 用扫码枪…" style="flex:1" />
+                <button class="btn btn--soft scan-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7V4h3M20 7V4h-3M4 17v3h3M20 17v3h-3M4 9v6M20 9v6M9 4h6M9 20h6"/></svg>扫码
+                </button>
+              </div>
+              <div class="prod-grid">
+                <div class="prod" data-id="p1" data-name="美的 变频空调 KFR-35GW" data-spec="1.5匹/三级能效" data-price="2999"><div class="prod__img">❄</div><div class="prod__name">美的 变频空调 KFR-35GW</div><div class="prod__meta">1.5匹 · 库存 36</div><div class="prod__price">¥2999<small>/台</small></div></div>
+                <div class="prod" data-id="p2" data-name="海尔 对开门冰箱 501L" data-spec="风冷无霜/一级" data-price="5999"><div class="prod__img">🧊</div><div class="prod__name">海尔 对开门冰箱 501L</div><div class="prod__meta">一级能效 · 库存 3 ⚠</div><div class="prod__price">¥5999<small>/台</small></div></div>
+                <div class="prod" data-id="p3" data-name="格力 挂机云锦 II" data-spec="1匹/变频" data-price="2599"><div class="prod__img">❄</div><div class="prod__name">格力 挂机云锦 II</div><div class="prod__meta">变频 · 库存 21</div><div class="prod__price">¥2599<small>/台</small></div></div>
+                <div class="prod" data-id="p4" data-name="小米 电视 65英寸 Pro" data-spec="4K/金属全面屏" data-price="2999"><div class="prod__img">📺</div><div class="prod__name">小米 电视 65英寸 Pro</div><div class="prod__meta">65寸 · 库存 58</div><div class="prod__price">¥2999<small>/台</small></div></div>
+                <div class="prod" data-id="p5" data-name="九阳 破壁机 Y1" data-spec="自清洗/热烘" data-price="399"><div class="prod__img">🥤</div><div class="prod__name">九阳 破壁机 Y1</div><div class="prod__meta">自清洗 · 库存 120</div><div class="prod__price">¥399<small>/台</small></div></div>
+                <div class="prod" data-id="p6" data-name="苏泊尔 电饭煲 4L" data-spec="柴火饭/智能" data-price="299"><div class="prod__img">🍚</div><div class="prod__name">苏泊尔 电饭煲 4L</div><div class="prod__meta">4升 · 库存 88</div><div class="prod__price">¥299<small>/台</small></div></div>
+                <div class="prod" data-id="p7" data-name="戴森 V12 吸尘器" data-spec="激光探测/无线" data-price="3299"><div class="prod__img">🌪</div><div class="prod__name">戴森 V12 吸尘器</div><div class="prod__meta">无线 · 库存 27</div><div class="prod__price">¥3299<small>/台</small></div></div>
+                <div class="prod" data-id="p8" data-name="飞利浦 电吹风 HP8230" data-spec="2200W/恒温" data-price="159"><div class="prod__img">💨</div><div class="prod__name">飞利浦 电吹风 HP8230</div><div class="prod__meta">恒温 · 库存 210</div><div class="prod__price">¥159<small>/台</small></div></div>
+                <div class="prod" data-id="p9" data-name="美的 电热水器 60L" data-spec="速热/一级" data-price="1299"><div class="prod__img">🔥</div><div class="prod__name">美的 电热水器 60L</div><div class="prod__meta">速热 · 库存 14</div><div class="prod__price">¥1299<small>/台</small></div></div>
+                <div class="prod" data-id="p10" data-name="公牛 插线板 6孔" data-spec="3米/过载保护" data-price="49"><div class="prod__img">🔌</div><div class="prod__name">公牛 插线板 6孔</div><div class="prod__meta">3米 · 库存 640</div><div class="prod__price">¥49<small>/个</small></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右：购物车 + 结算 -->
+          <div class="pos__col pos__col--pay pay">
+            <div class="pos__col-head">
+              <span>购物车</span>
+              <button class="cart-del" style="font-size:13px;color:var(--c-ink-400)" onclick="document.getElementById('cartList').innerHTML='';window.showToast('已清空',false)">清空</button>
+            </div>
+            <div class="pos__col-body">
+              <div id="cartList" class="cart-list"></div>
+
+              <div class="customer-pick">
+                <div class="ava">散</div>
+                <div class="meta"><b>散客 / 零售</b><br><small>点击选择会员或批发客户</small></div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#aab2bd" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
+
+              <div class="pay__line"><span>商品件数</span><b id="cartCount2">0</b></div>
+              <div class="pay__line"><span>商品金额</span><b id="cartTotal">¥0.00</b></div>
+              <div class="pay__line"><span>优惠 / 折扣</span><b style="color:var(--c-success)">-¥0.00</b></div>
+              <div class="pay__total"><span class="lbl">应收合计</span><span class="amt" id="payable">¥0.00</span></div>
+
+              <div style="font-size:12px;font-weight:600;color:var(--c-ink-500);margin-bottom:6px">收款方式</div>
+              <div class="pay-methods">
+                <div class="pay-method active">现金</div>
+                <div class="pay-method">微信</div>
+                <div class="pay-method">支付宝</div>
+                <div class="pay-method">银行卡</div>
+                <div class="pay-method">赊欠</div>
+                <div class="pay-method">混合</div>
+              </div>
+
+              <div class="pay__field">
+                <label>实收金额</label>
+                <input class="input" placeholder="请输入实收金额" value="0.00" />
+              </div>
+              <div class="pay__line" style="margin-bottom:10px"><span>找零</span><b style="color:var(--c-accent-600)">¥0.00</b></div>
+
+              <button class="btn btn--primary btn--block" id="submitOrder" style="height:44px;font-size:15px">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg>提交订单并打印
+              </button>
+              <button class="btn btn--ghost btn--block btn--sm mt-4">暂存为草稿</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 商品管理 ================= -->
+      <section class="view" data-view="products">
+        <div class="page-head">
+          <div><h1>商品管理</h1><p>管理商品档案、分类、多价格体系与库存上下限</p></div>
+          <div class="page-head__actions">
+            <button class="btn btn--ghost btn--sm">导入商品</button>
+            <button class="btn btn--primary btn--sm" onclick="openModal('新增商品','<div class=\'form-grid\'><div class=\'field full\'><label>商品名称</label><input class=\'input\' placeholder=\'如：美的 变频空调 KFR-35GW\'></div><div class=\'field\'><label>品牌</label><input class=\'input\' placeholder=\'美的\'></div><div class=\'field\'><label>分类</label><select class=\'select\'><option>大家电</option><option>厨卫电器</option><option>生活小家电</option><option>3C数码</option></select></div><div class=\'field\'><label>批发价</label><input class=\'input\' placeholder=\'2999.00\'></div><div class=\'field\'><label>零售价</label><input class=\'input\' placeholder=\'3299.00\'></div><div class=\'field full\'><label>规格 / 型号</label><input class=\'input\' placeholder=\'1.5匹 三级能效\'></div></div>')">+ 新增商品</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__head">
+            <div class="tabs" data-group="prod" style="margin:0;border:none">
+              <button class="active">全部 1,286</button><button>大家电 312</button><button>厨卫 268</button><button>小家电 455</button><button>3C 251</button>
+            </div>
+            <input class="input" style="width:220px" placeholder="搜索商品名称 / 编码" />
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>商品编码</th><th>名称 / 规格</th><th>分类</th><th>批发价</th><th>零售价</th><th>库存</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="cell-num">SP-100023</td><td><div class="cell-strong">美的 变频空调 KFR-35GW</div><small style="color:var(--c-ink-400)">1.5匹 三级能效</small></td><td>大家电</td><td class="cell-num">¥2,999</td><td class="cell-num">¥3,299</td><td class="cell-num">36</td><td><span class="tag tag--success"><span class="dot" style="background:var(--c-success)"></span>在售</span></td><td><div class="row-actions"><a class="link">编辑</a><a class="link">库存</a></div></td></tr>
+                <tr><td class="cell-num">SP-100087</td><td><div class="cell-strong">海尔 对开门冰箱 501L</div><small style="color:var(--c-ink-400)">风冷无霜 一级</small></td><td>大家电</td><td class="cell-num">¥5,999</td><td class="cell-num">¥6,499</td><td class="cell-num" style="color:var(--c-danger);font-weight:700">3 ⚠</td><td><span class="tag tag--warning"><span class="dot" style="background:var(--c-warning)"></span>库存预警</span></td><td><div class="row-actions"><a class="link">编辑</a><a class="link">补货</a></div></td></tr>
+                <tr><td class="cell-num">SP-100204</td><td><div class="cell-strong">小米 电视 65" Pro</div><small style="color:var(--c-ink-400)">4K 金属全面屏</small></td><td>3C数码</td><td class="cell-num">¥2,999</td><td class="cell-num">¥3,199</td><td class="cell-num">58</td><td><span class="tag tag--success"><span class="dot" style="background:var(--c-success)"></span>在售</span></td><td><div class="row-actions"><a class="link">编辑</a><a class="link">库存</a></div></td></tr>
+                <tr><td class="cell-num">SP-100318</td><td><div class="cell-strong">九阳 破壁机 Y1</div><small style="color:var(--c-ink-400)">自清洗 热烘</small></td><td>厨卫电器</td><td class="cell-num">¥399</td><td class="cell-num">¥459</td><td class="cell-num">120</td><td><span class="tag tag--success"><span class="dot" style="background:var(--c-success)"></span>在售</span></td><td><div class="row-actions"><a class="link">编辑</a><a class="link">库存</a></div></td></tr>
+                <tr><td class="cell-num">SP-100455</td><td><div class="cell-strong">戴森 V12 吸尘器</div><small style="color:var(--c-ink-400)">激光探测 无线</small></td><td>生活小家电</td><td class="cell-num">¥3,299</td><td class="cell-num">¥3,690</td><td class="cell-num">27</td><td><span class="tag tag--success"><span class="dot" style="background:var(--c-success)"></span>在售</span></td><td><div class="row-actions"><a class="link">编辑</a><a class="link">库存</a></div></td></tr>
+                <tr><td class="cell-num">SP-100512</td><td><div class="cell-strong">格力 旧款窗机（停采）</div><small style="color:var(--c-ink-400)">已清仓</small></td><td>大家电</td><td class="cell-num">¥1,299</td><td class="cell-num">¥1,499</td><td class="cell-num">0</td><td><span class="tag tag--gray">已下架</span></td><td><div class="row-actions"><a class="link">编辑</a><a class="link">上架</a></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 采购管理 ================= -->
+      <section class="view" data-view="purchase">
+        <div class="page-head">
+          <div><h1>采购管理</h1><p>向供应商下单进货，跟踪到货与入库</p></div>
+          <div class="page-head__actions"><button class="btn btn--primary btn--sm" onclick="showToast('已打开采购开单')">+ 采购开单</button></div>
+        </div>
+        <div class="grid grid-4 mt-0" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+          <div class="kpi" style="padding:18px 20px"><div class="kpi__label">本月采购额</div><div class="kpi__value" style="font-size:24px">¥486,200</div></div>
+          <div class="kpi" style="padding:18px 20px"><div class="kpi__label">待入库单</div><div class="kpi__value" style="font-size:24px">3</div></div>
+          <div class="kpi" style="padding:18px 20px"><div class="kpi__label">在途订单</div><div class="kpi__value" style="font-size:24px">5</div></div>
+          <div class="kpi" style="padding:18px 20px"><div class="kpi__label">供应商数</div><div class="kpi__value" style="font-size:24px">48</div></div>
+        </div>
+        <div class="card">
+          <div class="card__head"><div class="card__title">采购订单</div>
+            <div class="seg"><button class="active">全部</button><button>待入库</button><button>已完成</button></div>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>采购单号</th><th>供应商</th><th>商品种类</th><th>金额</th><th>下单日期</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="cell-num">CG-20260812-01</td><td>美的广州中心仓</td><td class="cell-num">12</td><td class="cell-num">¥128,400</td><td>08-12</td><td>08-17</td><td><span class="tag tag--warning">待入库</span></td><td><a class="link">入库</a></td></tr>
+                <tr><td class="cell-num">CG-20260810-07</td><td>海尔智家华东仓</td><td class="cell-num">8</td><td class="cell-num">¥96,800</td><td>08-10</td><td>08-15</td><td><span class="tag tag--success">已入库</span></td><td><a class="link">查看</a></td></tr>
+                <tr><td class="cell-num">CG-20260809-03</td><td>小米生态链供应商</td><td class="cell-num">20</td><td class="cell-num">¥154,200</td><td>08-09</td><td>08-18</td><td><span class="tag tag--info">在途</span></td><td><a class="link">跟踪</a></td></tr>
+                <tr><td class="cell-num">CG-20260808-11</td><td>九阳官方渠道</td><td class="cell-num">15</td><td class="cell-num">¥42,300</td><td>08-08</td><td>08-13</td><td><span class="tag tag--success">已入库</span></td><td><a class="link">查看</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 销售管理 ================= -->
+      <section class="view" data-view="sales">
+        <div class="page-head">
+          <div><h1>销售管理</h1><p>查询销售订单、客户与退货记录</p></div>
+          <div class="page-head__actions"><button class="btn btn--primary btn--sm" onclick="document.querySelector('[data-target=pos]').click()">+ 新建销售单</button></div>
+        </div>
+        <div class="card">
+          <div class="card__head">
+            <div class="tabs" data-group="sale" style="margin:0;border:none"><button class="active">全部</button><button>零售</button><button>批发</button><button>退货</button><button>欠款</button></div>
+            <input class="input" style="width:220px" placeholder="订单号 / 客户 / 手机号" />
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>订单号</th><th>客户</th><th>类型</th><th>商品</th><th>金额</th><th>收款</th><th>时间</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr><td class="cell-num">XS-20260817-0098</td><td>散客（前台）</td><td><span class="tag tag--gray">零售</span></td><td class="cell-num">2</td><td class="cell-num">¥3,398</td><td class="cell-num">¥3,398</td><td>14:52</td><td><span class="tag tag--success">已完成</span></td></tr>
+                <tr><td class="cell-num">XS-20260817-0097</td><td>宏达家电批发</td><td><span class="tag tag--info">批发</span></td><td class="cell-num">24</td><td class="cell-num">¥58,600</td><td class="cell-num">¥30,000</td><td>14:30</td><td><span class="tag tag--warning">部分收款</span></td></tr>
+                <tr><td class="cell-num">XS-20260817-0095</td><td>李女士（会员）</td><td><span class="tag tag--gray">零售</span></td><td class="cell-num">1</td><td class="cell-num">¥2,999</td><td class="cell-num">¥2,999</td><td>13:48</td><td><span class="tag tag--success">已完成</span></td></tr>
+                <tr><td class="cell-num">XS-20260816-0231</td><td>城东建材城</td><td><span class="tag tag--info">批发</span></td><td class="cell-num">60</td><td class="cell-num">¥182,400</td><td class="cell-num">¥0</td><td>昨天</td><td><span class="tag tag--danger">欠款</span></td></tr>
+                <tr><td class="cell-num">XS-20260816-0188</td><td>散客（前台）</td><td><span class="tag tag--gray">零售</span></td><td class="cell-num">3</td><td class="cell-num">¥857</td><td class="cell-num">¥857</td><td>昨天</td><td><span class="tag tag--success">已完成</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 库存管理 ================= -->
+      <section class="view" data-view="inventory">
+        <div class="page-head">
+          <div><h1>库存管理</h1><p>实时库存、预警线、盘点与调拨</p></div>
+          <div class="page-head__actions">
+            <button class="btn btn--ghost btn--sm">盘点</button>
+            <button class="btn btn--ghost btn--sm">调拨</button>
+            <button class="btn btn--primary btn--sm" onclick="showToast('已打开出入库单')">出入库</button>
+          </div>
+        </div>
+        <div class="grid grid-3" style="margin-bottom:20px">
+          <div class="kpi" style="padding:18px 20px"><div class="kpi__label">库存总量（SKU）</div><div class="kpi__value" style="font-size:24px">1,286</div></div>
+          <div class="kpi" style="padding:18px 20px"><div class="kpi__icon kpi__icon--red" style="position:static;width:0;height:0"></div><div class="kpi__label">低于安全库存</div><div class="kpi__value" style="font-size:24px;color:var(--c-danger)">9</div></div>
+          <div class="kpi" style="padding:18px 20px"><div class="kpi__label">呆滞（90天未动）</div><div class="kpi__value" style="font-size:24px">14</div></div>
+        </div>
+        <div class="card">
+          <div class="card__head"><div class="card__title">库存预警</div><span class="card__more">查看全部</span></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>商品</th><th>仓库</th><th>当前库存</th><th>安全线</th><th>缺口</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="cell-strong">海尔 对开门冰箱 501L</td><td>总仓 A 区</td><td class="cell-num" style="color:var(--c-danger);font-weight:700">3</td><td class="cell-num">10</td><td class="cell-num">7</td><td><span class="tag tag--danger">紧急补货</span></td><td><a class="link">生成采购</a></td></tr>
+                <tr><td class="cell-strong">美的 电热水器 60L</td><td>总仓 B 区</td><td class="cell-num" style="color:var(--c-warning);font-weight:700">14</td><td class="cell-num">20</td><td class="cell-num">6</td><td><span class="tag tag--warning">偏低</span></td><td><a class="link">生成采购</a></td></tr>
+                <tr><td class="cell-strong">格力 挂机云锦 II</td><td>城西门店</td><td class="cell-num" style="color:var(--c-warning);font-weight:700">5</td><td class="cell-num">8</td><td class="cell-num">3</td><td><span class="tag tag--warning">偏低</span></td><td><a class="link">调拨</a></td></tr>
+                <tr><td class="cell-strong">公牛 插线板 6孔</td><td>总仓 A 区</td><td class="cell-num">640</td><td class="cell-num">200</td><td class="cell-num">—</td><td><span class="tag tag--green">充足</span></td><td><a class="link">查看</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 报表分析 ================= -->
+      <section class="view" data-view="report">
+        <div class="page-head">
+          <div><h1>报表分析</h1><p>经营数据可视化，辅助决策与复盘</p></div>
+          <div class="page-head__actions">
+            <div class="seg"><button class="active">本月</button><button>本季</button><button>本年</button></div>
+            <button class="btn btn--primary btn--sm">导出报表</button>
+          </div>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi__label">本月销售额</div><div class="kpi__value">¥613,420</div><span class="kpi__trend up">▲ 14.2%</span></div>
+          <div class="kpi"><div class="kpi__label">本月毛利</div><div class="kpi__value">¥98,150</div><span class="kpi__trend up">▲ 6.8%</span></div>
+          <div class="kpi"><div class="kpi__label">毛利率</div><div class="kpi__value">16.0<span class="unit">%</span></div><span class="kpi__trend flat">— 0.3%</span></div>
+          <div class="kpi"><div class="kpi__label">客单价</div><div class="kpi__value">¥674</div><span class="kpi__trend up">▲ 3.1%</span></div>
+        </div>
+
+        <div class="cols-8-4 mt-5">
+          <div class="card">
+            <div class="card__head"><div class="card__title">月度销售 vs 采购</div>
+              <div class="seg"><button class="active">柱状</button><button>折线</button></div>
+            </div>
+            <div class="card__body">
+              <svg viewBox="0 0 720 280" width="100%" height="280" role="img" aria-label="月度销售采购柱状图">
+                <g stroke="#eef1f6"><line x1="40" y1="40" x2="700" y2="40"/><line x1="40" y1="100" x2="700" y2="100"/><line x1="40" y1="160" x2="700" y2="160"/><line x1="40" y1="220" x2="700" y2="220"/></g>
+                <g fill="#9aa4b2" font-size="11" font-family="sans-serif">
+                  <text x="10" y="224">0</text><text x="10" y="164">200k</text><text x="10" y="104">400k</text><text x="10" y="44">600k</text>
+                </g>
+                <!-- 销售 蓝 -->
+                <g fill="#2d5be3">
+                  <rect x="70" y="120" width="34" height="100" rx="4"/><rect x="160" y="90" width="34" height="130" rx="4"/>
+                  <rect x="250" y="140" width="34" height="80" rx="4"/><rect x="340" y="70" width="34" height="150" rx="4"/>
+                  <rect x="430" y="100" width="34" height="120" rx="4"/><rect x="520" y="60" width="34" height="160" rx="4"/>
+                  <rect x="610" y="50" width="34" height="170" rx="4"/>
+                </g>
+                <!-- 采购 橙 -->
+                <g fill="#ff7a33">
+                  <rect x="108" y="150" width="34" height="70" rx="4"/><rect x="198" y="130" width="34" height="90" rx="4"/>
+                  <rect x="288" y="170" width="34" height="50" rx="4"/><rect x="378" y="120" width="34" height="100" rx="4"/>
+                  <rect x="468" y="140" width="34" height="80" rx="4"/><rect x="558" y="110" width="34" height="110" rx="4"/>
+                  <rect x="648" y="100" width="34" height="120" rx="4"/>
+                </g>
+                <g fill="#9aa4b2" font-size="11" font-family="sans-serif" text-anchor="middle">
+                  <text x="105" y="262">1月</text><text x="195" y="262">2月</text><text x="285" y="262">3月</text><text x="375" y="262">4月</text><text x="465" y="262">5月</text><text x="555" y="262">6月</text><text x="645" y="262">7月</text>
+                </g>
+              </svg>
+              <div style="display:flex;gap:16px;justify-content:center;margin-top:8px">
+                <span style="font-size:13px;color:var(--c-ink-500)"><span class="dot" style="background:#2d5be3"></span> 销售</span>
+                <span style="font-size:13px;color:var(--c-ink-500)"><span class="dot" style="background:#ff7a33"></span> 采购</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head"><div class="card__title">经营指标</div></div>
+            <div class="card__body">
+              <div class="mini-stat"><span class="k">销售目标完成率</span><span class="v">78%</span></div>
+              <div class="progress" style="margin:8px 0 14px"><i style="width:78%"></i></div>
+              <div class="mini-stat"><span class="k">库存周转率</span><span class="v">5.2 次</span></div>
+              <div class="mini-stat"><span class="k">复购客户占比</span><span class="v">34%</span></div>
+              <div class="mini-stat"><span class="k">退款率</span><span class="v">1.2%</span></div>
+              <div class="mini-stat"><span class="k">Top 客户贡献</span><span class="v">41%</span></div>
+              <div class="mini-stat"><span class="k">滞销金额</span><span class="v">¥36,200</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 财务管理 ================= -->
+      <section class="view" data-view="finance">
+        <div class="page-head">
+          <div><h1>财务管理</h1><p>应收应付、收付款与对账</p></div>
+          <div class="page-head__actions"><button class="btn btn--primary btn--sm" onclick="showToast('已打开收款登记')">登记收款</button></div>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi__icon kpi__icon--green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div><div class="kpi__label">本期收款</div><div class="kpi__value">¥428,600</div></div>
+          <div class="kpi"><div class="kpi__icon kpi__icon--orange"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div><div class="kpi__label">本期付款</div><div class="kpi__value">¥312,400</div></div>
+          <div class="kpi"><div class="kpi__icon kpi__icon--red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4m0 4h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div><div class="kpi__label">应收账款</div><div class="kpi__value">¥152,800</div></div>
+          <div class="kpi"><div class="kpi__icon kpi__icon--blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M7 7h7a3 3 0 0 1 0 6H7m0 0h8"/></svg></div><div class="kpi__label">应付账款</div><div class="kpi__value">¥88,400</div></div>
+        </div>
+        <div class="card mt-5">
+          <div class="card__head"><div class="card__title">应收流水（欠款客户）</div><span class="card__more">催收提醒</span></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>客户</th><th>联系电话</th><th>应收金额</th><th>已收</th><th>欠款</th><th>账期</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="cell-strong">城东建材城</td><td class="cell-num">138****2231</td><td class="cell-num">¥182,400</td><td class="cell-num">¥0</td><td class="cell-num" style="color:var(--c-danger);font-weight:700">¥182,400</td><td>月结 30 天</td><td><span class="tag tag--danger">逾期</span></td><td><a class="link">催收</a></td></tr>
+                <tr><td class="cell-strong">宏达家电批发</td><td class="cell-num">139****8800</td><td class="cell-num">¥58,600</td><td class="cell-num">¥30,000</td><td class="cell-num" style="color:var(--c-warning);font-weight:700">¥28,600</td><td>月结 15 天</td><td><span class="tag tag--warning">部分</span></td><td><a class="link">收款</a></td></tr>
+                <tr><td class="cell-strong">万家乐连锁</td><td class="cell-num">137****6612</td><td class="cell-num">¥96,200</td><td class="cell-num">¥40,000</td><td class="cell-num" style="color:var(--c-warning);font-weight:700">¥56,200</td><td>月结 30 天</td><td><span class="tag tag--warning">部分</span></td><td><a class="link">收款</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 系统设置 ================= -->
+      <section class="view" data-view="settings">
+        <div class="page-head">
+          <div><h1>系统设置</h1><p>企业信息、角色权限、打印与基础参数</p></div>
+        </div>
+        <div class="cols-7-5">
+          <div class="card">
+            <div class="card__head"><div class="card__title">企业信息</div></div>
+            <div class="card__body">
+              <div class="form-grid">
+                <div class="field full"><label>企业名称</label><input class="input" value="云器电器批发连锁有限公司" /></div>
+                <div class="field"><label>统一社会信用代码</label><input class="input" value="91440101MA5XXXXXX" /></div>
+                <div class="field"><label>门店数量</label><input class="input" value="6 家" /></div>
+                <div class="field full"><label>经营地址</label><input class="input" value="广州市番禺区迎宾大道 188 号云器大厦" /></div>
+                <div class="field"><label>联系人</label><input class="input" value="林晓" /></div>
+                <div class="field"><label>联系电话</label><input class="input" value="020-8888 6666" /></div>
+              </div>
+              <button class="btn btn--primary btn--sm mt-5">保存修改</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head"><div class="card__title">功能与权限</div></div>
+            <div class="card__body" style="padding-top:6px">
+              <div class="set-row"><div><div class="set-row__title">多单位 / 批发价体系</div><div class="set-row__desc">支持 台/箱/件 多单位与分级客户价</div></div><button class="switch on"></button></div>
+              <div class="set-row"><div><div class="set-row__title">库存预警提醒</div><div class="set-row__desc">低于安全线时工作台与微信推送</div></div><button class="switch on"></button></div>
+              <div class="set-row"><div><div class="set-row__title">赊销 / 欠款管理</div><div class="set-row__desc">允许客户欠款并生成应收账期</div></div><button class="switch on"></button></div>
+              <div class="set-row"><div><div class="set-row__title">扫码枪 / PDA 接入</div><div class="set-row__desc">仓库拣货与门店快速开单</div></div><button class="switch"></button></div>
+              <div class="set-row"><div><div class="set-row__title">操作日志审计</div><div class="set-row__desc">记录关键单据的增删改</div></div><button class="switch on"></button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 数据管理 ================= -->
+      <section class="view" data-view="data">
+        <div class="page-head">
+          <div><h1>数据管理</h1><p>数据备份、导入导出与操作日志，保障经营安全</p></div>
+          <div class="page-head__actions"><button class="btn btn--primary btn--sm" onclick="showToast('已开始云备份')">立即备份</button></div>
+        </div>
+        <div class="grid grid-3">
+          <div class="card"><div class="card__body">
+            <div style="font-size:32px">💾</div>
+            <div class="card__title mt-4">云端备份</div>
+            <p style="color:var(--c-ink-500);font-size:13px;margin:6px 0 14px">每日 03:00 自动备份，已保留最近 30 天。</p>
+            <button class="btn btn--ghost btn--sm btn--block">恢复数据</button>
+          </div></div>
+          <div class="card"><div class="card__body">
+            <div style="font-size:32px">📥</div>
+            <div class="card__title mt-4">导入导出</div>
+            <p style="color:var(--c-ink-500);font-size:13px;margin:6px 0 14px">支持商品、客户、库存 Excel 批量导入导出。</p>
+            <button class="btn btn--ghost btn--sm btn--block">下载模板</button>
+          </div></div>
+          <div class="card"><div class="card__body">
+            <div style="font-size:32px">📜</div>
+            <div class="card__title mt-4">操作日志</div>
+            <p style="color:var(--c-ink-500);font-size:13px;margin:6px 0 14px">审计关键操作，可按时间 / 人员检索。</p>
+            <button class="btn btn--ghost btn--sm btn--block">查看日志</button>
+          </div></div>
+        </div>
+        <div class="card mt-5">
+          <div class="card__head"><div class="card__title">最近操作日志</div></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>时间</th><th>操作人</th><th>模块</th><th>动作</th><th>对象</th></tr></thead>
+              <tbody>
+                <tr><td class="cell-num">08-17 14:52</td><td>林晓</td><td>销售</td><td>新增销售单</td><td class="cell-num">XS-20260817-0098</td></tr>
+                <tr><td class="cell-num">08-17 11:20</td><td>王仓管</td><td>库存</td><td>采购入库</td><td class="cell-num">CG-20260810-07</td></tr>
+                <tr><td class="cell-num">08-17 09:05</td><td>系统</td><td>数据</td><td>自动备份</td><td>daily_20260817</td></tr>
+                <tr><td class="cell-num">08-16 18:30</td><td>陈财务</td><td>财务</td><td>登记收款</td><td class="cell-num">¥30,000</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- Toast & Modal -->
+<div class="toast" id="toast"></div>
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <div class="modal__head" id="modalTitle">新增商品</div>
+    <div class="modal__body" id="modalBody"></div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost btn--sm" id="modalClose">取消</button>
+      <button class="btn btn--primary btn--sm" onclick="window.showToast('已保存商品');window.closeModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

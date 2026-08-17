@@ -1,0 +1,5 @@
+# 依赖 / 系统 / 个人数据
+node_modules/
+.workbuddy/
+.DS_Store
+*.log
