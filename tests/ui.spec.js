@@ -988,6 +988,24 @@ async function run() {
     'before=' + beforeDel + ' after=' + i14.DB.all('products').length);
   check('批量删除后选中状态清空', Object.keys(i14.window.App ? {} : {}).length === 0 || true);
   check('批量操作全程无 JS 错误', i14.errors.length === 0, i14.errors.join(' | '));
+
+  section('I15 手机端底部导航优化（剔除库存+自适应）');
+  var i15 = boot({ hash: '#products', width: 390 });
+  var bottomItems = i15.$$('#bottomNav .nav__item');
+  var bottomIds = Array.from(bottomItems).map(function (a) { return a.getAttribute('data-id'); });
+  check('手机端底部导航共4项', bottomIds.length === 4, bottomIds.join(','));
+  check('底部导航不含库存页', bottomIds.indexOf('inventory') < 0, bottomIds.join(','));
+  check('底部导航含工作台', bottomIds.indexOf('dashboard') >= 0);
+  check('底部导航含商品', bottomIds.indexOf('products') >= 0);
+  check('底部导航含开单（pos）', bottomIds.indexOf('pos') >= 0, bottomIds.join(','));
+  check('底部导航含我的（more）', bottomIds.indexOf('more') >= 0);
+  // 库存管理仍可在「我的」菜单中访问
+  var sheetItems = i15.$$('#sheetNav .nav__item');
+  var sheetIds = Array.from(sheetItems).map(function (a) { return a.getAttribute('data-id'); });
+  check('「我的」菜单仍含库存管理', sheetIds.indexOf('inventory') >= 0, sheetIds.join(','));
+  check('「我的」菜单含系统设置', sheetIds.indexOf('settings') >= 0);
+  check('「我的」菜单含数据管理', sheetIds.indexOf('data') >= 0);
+  check('手机端导航全程无 JS 错误', i15.errors.length === 0, i15.errors.join(' | '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */

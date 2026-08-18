@@ -124,7 +124,7 @@
   var MOBILE_NAV = [
     { id: 'dashboard', name: '工作台', ico: '📊' },
     { id: 'products', name: '商品', ico: '📦' },
-    { id: 'inventory', name: '库存', ico: '🏬' },
+    { id: 'pos', name: '开单', ico: '🧾' },
     { id: 'more', name: '我的', ico: '👤' }
   ];
 
