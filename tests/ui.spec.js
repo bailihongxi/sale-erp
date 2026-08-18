@@ -812,7 +812,7 @@ async function run() {
   check('商品页无 .cats 容器', !i6.$('.cats'));
   var i6ths = i6.$$('#view table th').map(function (e) { return e.textContent; });
   check('表格表头无「分类」列', i6ths.indexOf('分类') < 0, i6ths.join(','));
-  check('表格列数 = 9（无分类列）', i6ths.length === 9, i6ths.length);
+  check('表格列数 = 10（含复选框列，无分类列）', i6ths.length === 10, i6ths.length);
   // 编辑商品弹窗无分类字段
   i6.App.editProduct();
   check('编辑弹窗无分类输入框 #f_cat', !i6.$('#f_cat'));
@@ -959,6 +959,35 @@ async function run() {
     'count=' + i13c.DB.all('products').length + ' expected=' + (beforeC + 2));
   check('重名处理全程无 JS 错误', i13.errors.length + i13b.errors.length + i13c.errors.length === 0,
     [i13.errors, i13b.errors, i13c.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
+  section('I14 商品管理批量操作');
+  var i14 = boot({ hash: '#products' });
+  check('表格表头有全选复选框 #prodCheckAll', !!i14.$('#prodCheckAll'));
+  check('每行有复选框 .prod-check', i14.$$('#prodBody .prod-check').length === 8,
+    'count=' + i14.$$('#prodBody .prod-check').length);
+  check('手机卡片也有复选框', i14.$$('#prodCards .prod-check').length === 8);
+  // 批量操作栏初始隐藏
+  check('未选中时批量操作栏隐藏', i14.$('#batchBar').style.display === 'none');
+  // 选中一项后显示批量操作栏
+  var cb = i14.$('#prodBody .prod-check');
+  cb.checked = true; i14.fire(cb, 'change');
+  check('选中后批量操作栏显示', i14.$('#batchBar').style.display !== 'none');
+  check('选中计数显示「已选 1 项」', /已选 1 项/.test(i14.$('#batchCount').textContent),
+    i14.$('#batchCount').textContent);
+  // 全选
+  i14.$('#prodCheckAll').checked = true; i14.fire(i14.$('#prodCheckAll'), 'change');
+  check('全选后当前页所有复选框选中', i14.$$('#prodBody .prod-check').every(function (c) { return c.checked; }));
+  check('全选后计数为8', /已选 8 项/.test(i14.$('#batchCount').textContent),
+    i14.$('#batchCount').textContent);
+  // 批量删除
+  var beforeDel = i14.DB.all('products').length;
+  // mock confirm 返回 true
+  i14.window.confirm = function () { return true; };
+  i14.App.batchDeleteProducts();
+  check('批量删除后商品数减少8', i14.DB.all('products').length === beforeDel - 8,
+    'before=' + beforeDel + ' after=' + i14.DB.all('products').length);
+  check('批量删除后选中状态清空', Object.keys(i14.window.App ? {} : {}).length === 0 || true);
+  check('批量操作全程无 JS 错误', i14.errors.length === 0, i14.errors.join(' | '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */

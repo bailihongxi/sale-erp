@@ -233,7 +233,7 @@
     document.getElementById('viewTitle').textContent = '商品管理';
     var list = DB.all('products');
     var PAGE_SIZE = 50;
-    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '', type: '全部', page: 1 });
+    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '', type: '全部', page: 1, selected: {} });
     var types = Array.from(new Set(list.map(function (p) { return p.type; }).filter(Boolean)));
     // 计算重复名称集合（全量统计，不受分页/筛选影响）
     var nameCount = {};
@@ -248,6 +248,7 @@
     }).join('');
     var bodyBlock = hasProd
       ? '<div class="card prod-table"><table class="table"><thead><tr>' +
+        '<th class="col-check"><input type="checkbox" id="prodCheckAll"/></th>' +
         '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
         '</tr></thead><tbody id="prodBody"></tbody></table></div>' +
         '<div class="prod-cards" id="prodCards"></div>' +
@@ -259,6 +260,10 @@
       '<div class="view-head"><h2>商品管理</h2><span class="sub">共 ' + list.length + ' 个商品' +
         (dupCount > 0 ? '　<span class="tag tag--warning">⚠️ ' + dupCount + ' 个重名</span>' : '') + '</span>' +
       '<div class="spacer"></div>' +
+      '<span id="batchBar" style="display:none" class="batch-bar">' +
+        '<span id="batchCount" class="muted">已选 0 项</span>' +
+        '<button class="btn btn--sm btn--danger" onclick="App.batchDeleteProducts()">🗑 批量删除</button>' +
+      '</span>' +
       (dupCount > 0 ? '<button class="btn btn--sm btn--warning" onclick="App.mergeDuplicateProducts()">🔧 合并重名商品</button>' : '') +
       '<button class="btn" onclick="App.openBatchImport()">📥 批量导入</button>' +
       '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button></div>' +
@@ -285,6 +290,20 @@
         filter.type = $('#prodType').value;
         filter.page = 1;
         renderProdRows();
+      });
+      // 全选/取消全选（当前页）
+      $('#prodCheckAll').addEventListener('change', function (e) {
+        var pageIds = getFiltered().slice((filter.page - 1) * PAGE_SIZE, filter.page * PAGE_SIZE).map(function (p) { return p.id; });
+        pageIds.forEach(function (id) { filter.selected[id] = e.target.checked; });
+        renderProdRows();
+      });
+      // 单行选择（事件委托）
+      app.addEventListener('change', function (e) {
+        if (e.target.classList && e.target.classList.contains('prod-check')) {
+          var id = e.target.getAttribute('data-id');
+          filter.selected[id] = e.target.checked;
+          updateBatchBar();
+        }
       });
     }
     renderProdRows();
@@ -331,18 +350,23 @@
         body.innerHTML = pageData.map(function (p) {
           var low = p.stock <= (p.lowStock || DB.settings().lowStock);
           var isDup = dupNames[(p.name || '').trim()];
+          var checked = filter.selected[p.id] ? ' checked' : '';
           var nameHtml = isDup ? '<b class="dup-name" title="存在重名商品">' + esc(p.name) + '</b>' : '<b>' + esc(p.name) + '</b>';
-          return '<tr><td>' + nameHtml + '</td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
-        }).join('') || '<tr><td colspan="9" class="empty">没有匹配的商品</td></tr>';
+          return '<tr><td class="col-check"><input type="checkbox" class="prod-check" data-id="' + p.id + '"' + checked + '/></td><td>' + nameHtml + '</td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
+        }).join('') || '<tr><td colspan="10" class="empty">没有匹配的商品</td></tr>';
       }
       var cards = $('#prodCards');
       if (cards) {
         cards.innerHTML = pageData.map(function (p) {
           var isDup = dupNames[(p.name || '').trim()];
+          var checked = filter.selected[p.id] ? ' checked' : '';
           var nameHtml = isDup ? '<span class="product-card__name dup-name" title="存在重名商品">' + esc(p.name) + '</span>' : '<span class="product-card__name">' + esc(p.name) + '</span>';
           return '<div class="product-card" data-id="' + p.id + '">' +
             '<div class="product-card__row">' +
-              nameHtml +
+              '<label style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">' +
+                '<input type="checkbox" class="prod-check" data-id="' + p.id + '"' + checked + '/>' +
+                nameHtml +
+              '</label>' +
               '<span class="muted">' + esc(p.type || '') + '</span>' +
             '</div>' +
             '<div class="product-card__row">' +
@@ -353,7 +377,22 @@
           '</div>';
         }).join('') || '<div class="empty">没有匹配的商品</div>';
       }
+      updateBatchBar();
       renderPager(total);
+    }
+    function updateBatchBar() {
+      var ids = Object.keys(filter.selected || {}).filter(function (id) { return filter.selected[id]; });
+      var bar = $('#batchBar');
+      var cnt = $('#batchCount');
+      if (bar) bar.style.display = ids.length > 0 ? '' : 'none';
+      if (cnt) cnt.textContent = '已选 ' + ids.length + ' 项';
+      // 全选复选框状态
+      var all = $('#prodCheckAll');
+      if (all) {
+        var pageIds = (getFiltered().slice((filter.page - 1) * PAGE_SIZE, filter.page * PAGE_SIZE)).map(function (p) { return p.id; });
+        var allChecked = pageIds.length > 0 && pageIds.every(function (id) { return filter.selected[id]; });
+        all.checked = allChecked;
+      }
     }
   };
 
@@ -432,6 +471,16 @@
     } else {
       toast('没有重名商品需要合并', 'ok');
     }
+    route();
+  };
+  /** 批量删除选中的商品 */
+  window.App.batchDeleteProducts = function () {
+    var filter = uiState.prodFilter || { selected: {} };
+    var ids = Object.keys(filter.selected || {}).filter(function (id) { return filter.selected[id]; });
+    if (ids.length === 0) { toast('请先选择商品', 'err'); return; }
+    if (!confirm('确定删除选中的 ' + ids.length + ' 个商品？')) return;
+    ids.forEach(function (id) { DB.remove('products', id); delete filter.selected[id]; });
+    toast('已删除 ' + ids.length + ' 个商品', 'ok');
     route();
   };
   /** 批量导入商品（CSV / TSV / JSON） */
