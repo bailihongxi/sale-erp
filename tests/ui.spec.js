@@ -831,6 +831,35 @@ async function run() {
   // CSS 验证
   var i7css = helpers.read('assets/style.css');
   check('CSS 含手机端 .prod-filter 样式', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.prod-filter/.test(i7css));
+
+  section('I10 商品管理大数据量分页渲染');
+  var i10 = boot({ hash: '#products' });
+  for (var i = 0; i < 120; i++) {
+    i10.DB.insert('products', { name: '分页商品' + i, brand: 'B', model: 'M' + i, type: 'T', unit: '台', priceWholesale: 10, priceRetail: 15, stock: 100, lowStock: 10 });
+  }
+  i10.go('products');
+  check('大数据量下表格只渲染第一页（≤50行）', i10.$$('#prodBody tr').length <= 50,
+    'rows=' + i10.$$('#prodBody tr').length);
+  check('大数据量下卡片只渲染第一页（≤50张）', i10.$$('#prodCards .product-card').length <= 50);
+  check('出现分页控件 #prodPager', !!i10.$('#prodPager') && i10.$('#prodPager').innerHTML.length > 0);
+  check('分页信息含总条数', /共 \d+ 条/.test(i10.$('#prodPager').textContent));
+  check('分页显示「第 1 / 3 页」', /第 1 \/ 3 页/.test(i10.$('#prodPager').textContent),
+    i10.$('#prodPager').textContent);
+  var nextBtn = i10.$('#prodPager button[data-act="next"]');
+  check('下一页按钮可用', !!nextBtn && !nextBtn.disabled);
+  i10.click(nextBtn);
+  check('翻到第2页后显示「第 2 / 3 页」', /第 2 \/ 3 页/.test(i10.$('#prodPager').textContent),
+    i10.$('#prodPager').textContent);
+  check('第2页仍只渲染≤50行', i10.$$('#prodBody tr').length <= 50);
+  i10.click(i10.$('#prodPager button[data-act="prev"]'));
+  check('回到第1页', /第 1 \/ 3 页/.test(i10.$('#prodPager').textContent));
+  i10.$('#prodKw').value = '分页商品'; i10.fire(i10.$('#prodKw'), 'input');
+  check('搜索后回到第1页', /第 1 \/ 3 页/.test(i10.$('#prodPager').textContent));
+  check('搜索结果仍分页（≤50行）', i10.$$('#prodBody tr').length <= 50);
+  var i10b = boot({ hash: '#products' });
+  check('小数据量无分页控件', !i10b.$('#prodPager') || i10b.$('#prodPager').innerHTML === '');
+  check('分页渲染全程无 JS 错误', i10.errors.length + i10b.errors.length === 0,
+    [i10.errors, i10b.errors].map(function (x) { return x.join('|'); }).join(' / '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */

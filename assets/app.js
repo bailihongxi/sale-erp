@@ -232,32 +232,16 @@
   views.products = function () {
     document.getElementById('viewTitle').textContent = '商品管理';
     var list = DB.all('products');
-    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '' });
-
-    var rows = list.filter(function (p) {
-      if (filter.kw && (p.name + p.brand + p.model + p.type).toLowerCase().indexOf(filter.kw.toLowerCase()) < 0) return false;
-      return true;
-    }).map(function (p) {
-      var low = p.stock <= (p.lowStock || DB.settings().lowStock);
-      return '<tr>' +
-        '<td><b>' + esc(p.name) + '</b></td>' +
-        '<td>' + esc(p.brand) + '</td>' +
-        '<td>' + esc(p.model) + '</td>' +
-        '<td>' + esc(p.type) + '</td>' +
-        '<td>' + esc(p.unit) + '</td>' +
-        '<td class="mono">' + money(p.priceWholesale) + '</td>' +
-        '<td class="mono">' + money(p.priceRetail) + '</td>' +
-        '<td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td>' +
-        '<td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td>' +
-        '</tr>';
-    }).join('') || '<tr><td colspan="9" class="empty">没有匹配的商品</td></tr>';
+    var PAGE_SIZE = 50;
+    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '', page: 1 });
 
     var hasProd = list.length > 0;
     var bodyBlock = hasProd
       ? '<div class="card prod-table"><table class="table"><thead><tr>' +
         '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
         '</tr></thead><tbody id="prodBody"></tbody></table></div>' +
-        '<div class="prod-cards" id="prodCards"></div>'
+        '<div class="prod-cards" id="prodCards"></div>' +
+        '<div class="pagination" id="prodPager"></div>'
       : emptyGuide({ ico: '📦', title: '还没有商品', desc: '新增第一个商品，开始管理你的库存',
           actions: '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增第一个商品</button>' });
 
@@ -272,24 +256,60 @@
       bodyBlock;
 
     if (hasProd) {
-      $('#prodKw').addEventListener('input', function (e) { filter.kw = e.target.value; renderProdRows(); });
+      $('#prodKw').addEventListener('input', function (e) {
+        filter.kw = e.target.value;
+        filter.page = 1;
+        renderProdRows();
+      });
     }
     renderProdRows();
-    function renderProdRows() {
-      var filtered = list.filter(function (p) {
+    function getFiltered() {
+      return list.filter(function (p) {
         if (filter.kw && (p.name + p.brand + p.model + p.type).toLowerCase().indexOf(filter.kw.toLowerCase()) < 0) return false;
         return true;
       });
+    }
+    function renderPager(total) {
+      var pager = $('#prodPager');
+      if (!pager) return;
+      var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (filter.page > pages) filter.page = pages;
+      if (total <= PAGE_SIZE) { pager.innerHTML = ''; return; }
+      var start = (filter.page - 1) * PAGE_SIZE + 1;
+      var end = Math.min(filter.page * PAGE_SIZE, total);
+      pager.innerHTML =
+        '<div class="pagination__info">显示 ' + start + '-' + end + ' / 共 ' + total + ' 条</div>' +
+        '<div class="pagination__btns">' +
+        '<button class="btn btn--sm" data-act="prev"' + (filter.page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+        '<span class="pagination__page">第 ' + filter.page + ' / ' + pages + ' 页</span>' +
+        '<button class="btn btn--sm" data-act="next"' + (filter.page >= pages ? ' disabled' : '') + '>下一页</button>' +
+        '</div>';
+      pager.querySelectorAll('button[data-act]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var act = btn.getAttribute('data-act');
+          if (act === 'prev' && filter.page > 1) filter.page--;
+          if (act === 'next' && filter.page < pages) filter.page++;
+          renderProdRows();
+        });
+      });
+    }
+    function renderProdRows() {
+      var filtered = getFiltered();
+      var total = filtered.length;
+      var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (filter.page > pages) filter.page = pages;
+      var startIdx = (filter.page - 1) * PAGE_SIZE;
+      var pageData = filtered.slice(startIdx, startIdx + PAGE_SIZE);
       var body = $('#prodBody');
       if (body) {
-        body.innerHTML = filtered.map(function (p) {
+        body.innerHTML = pageData.map(function (p) {
           var low = p.stock <= (p.lowStock || DB.settings().lowStock);
           return '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
         }).join('') || '<tr><td colspan="9" class="empty">没有匹配的商品</td></tr>';
       }
       var cards = $('#prodCards');
       if (cards) {
-        cards.innerHTML = filtered.map(function (p) {
+        cards.innerHTML = pageData.map(function (p) {
           return '<div class="product-card" data-id="' + p.id + '">' +
             '<div class="product-card__row">' +
               '<span class="product-card__name">' + esc(p.name) + '</span>' +
@@ -303,6 +323,7 @@
           '</div>';
         }).join('') || '<div class="empty">没有匹配的商品</div>';
       }
+      renderPager(total);
     }
   };
 

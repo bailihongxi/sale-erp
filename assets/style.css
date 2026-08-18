@@ -235,8 +235,13 @@ a{color:inherit;text-decoration:none}
 /* 商品管理：分类下拉筛选（I6） */
 .prod-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .prod-filter .search{flex:1;min-width:140px}
-#prodCat{padding:7px 10px;border-radius:8px;border:1px solid var(--c-border);background:#fff;font-size:13px;outline:none;cursor:pointer;max-width:160px}
-#prodCat:focus{border-color:var(--c-primary)}
+
+/* 分页控件 */
+.pagination{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:8px 4px;flex-wrap:wrap;gap:8px}
+.pagination__info{font-size:13px;color:var(--c-muted)}
+.pagination__btns{display:flex;align-items:center;gap:8px}
+.pagination__page{font-size:13px;color:var(--c-muted);min-width:60px;text-align:center}
+.pagination button:disabled{opacity:.4;cursor:not-allowed}
 
 .settle-line{display:flex;justify-content:space-between;padding:7px 0;font-size:14px}
 .settle-line.total{font-size:18px;font-weight:800;border-top:1px solid var(--c-border);margin-top:6px;padding-top:10px}
