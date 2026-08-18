@@ -117,14 +117,14 @@
   /* ---------------- 种子数据 ---------------- */
   function seed() {
     var products = [
-      { name: '海尔 冰箱 BCD-216', brand: '海尔', model: 'BCD-216STPT', type: '冰箱', category: '大家电', unit: '台', priceWholesale: 1899, priceRetail: 2199, stock: 42, lowStock: 10 },
-      { name: '美的 空调 KFR-35', brand: '美的', model: 'KFR-35GW', type: '空调', category: '大家电', unit: '台', priceWholesale: 2299, priceRetail: 2599, stock: 8, lowStock: 10 },
-      { name: '小米 电视 65" Pro', brand: '小米', model: 'L65M7', type: '电视', category: '黑电', unit: '台', priceWholesale: 2799, priceRetail: 2999, stock: 58, lowStock: 8 },
-      { name: '格力 电风扇 FS-40', brand: '格力', model: 'FS-40', type: '风扇', category: '小家电', unit: '台', priceWholesale: 129, priceRetail: 159, stock: 120, lowStock: 20 },
-      { name: '九阳 豆浆机 DJ13B', brand: '九阳', model: 'DJ13B', type: '豆浆机', category: '厨房电器', unit: '台', priceWholesale: 299, priceRetail: 359, stock: 5, lowStock: 12 },
-      { name: '飞利浦 剃须刀 S5000', brand: '飞利浦', model: 'S5000', type: '剃须刀', category: '个护电器', unit: '个', priceWholesale: 399, priceRetail: 499, stock: 36, lowStock: 10 },
-      { name: '西门子 洗衣机 WM12P', brand: '西门子', model: 'WM12P', type: '洗衣机', category: '大家电', unit: '台', priceWholesale: 3199, priceRetail: 3599, stock: 15, lowStock: 5 },
-      { name: 'TCL 电视 55"', brand: 'TCL', model: 'L55C', type: '电视', category: '黑电', unit: '台', priceWholesale: 1799, priceRetail: 1999, stock: 30, lowStock: 8 }
+      { name: '海尔 冰箱 BCD-216', brand: '海尔', model: 'BCD-216STPT', type: '冰箱', unit: '台', priceWholesale: 1899, priceRetail: 2199, stock: 42, lowStock: 10 },
+      { name: '美的 空调 KFR-35', brand: '美的', model: 'KFR-35GW', type: '空调', unit: '台', priceWholesale: 2299, priceRetail: 2599, stock: 8, lowStock: 10 },
+      { name: '小米 电视 65" Pro', brand: '小米', model: 'L65M7', type: '电视', unit: '台', priceWholesale: 2799, priceRetail: 2999, stock: 58, lowStock: 8 },
+      { name: '格力 电风扇 FS-40', brand: '格力', model: 'FS-40', type: '风扇', unit: '台', priceWholesale: 129, priceRetail: 159, stock: 120, lowStock: 20 },
+      { name: '九阳 豆浆机 DJ13B', brand: '九阳', model: 'DJ13B', type: '豆浆机', unit: '台', priceWholesale: 299, priceRetail: 359, stock: 5, lowStock: 12 },
+      { name: '飞利浦 剃须刀 S5000', brand: '飞利浦', model: 'S5000', type: '剃须刀', unit: '个', priceWholesale: 399, priceRetail: 499, stock: 36, lowStock: 10 },
+      { name: '西门子 洗衣机 WM12P', brand: '西门子', model: 'WM12P', type: '洗衣机', unit: '台', priceWholesale: 3199, priceRetail: 3599, stock: 15, lowStock: 5 },
+      { name: 'TCL 电视 55"', brand: 'TCL', model: 'L55C', type: '电视', unit: '台', priceWholesale: 1799, priceRetail: 1999, stock: 30, lowStock: 8 }
     ].map(function (p) { p.id = uid(); return p; });
 
     var customers = [
@@ -217,6 +217,20 @@
   function all(col) { ensure(); return state[col] || []; }
   function get(col, id) { ensure(); return (state[col] || []).filter(function (x) { return x.id === id; })[0]; }
   function insert(col, obj) { ensure(); obj.id = obj.id || uid(); state[col] = state[col] || []; state[col].push(obj); persist(); return obj; }
+  /** 批量插入：只在全部完成后持久化一次，避免大数据量时反复写 localStorage 导致卡顿 */
+  function insertBatch(col, objects) {
+    ensure();
+    state[col] = state[col] || [];
+    var inserted = [];
+    for (var i = 0; i < objects.length; i++) {
+      var obj = objects[i];
+      obj.id = obj.id || uid();
+      state[col].push(obj);
+      inserted.push(obj);
+    }
+    persist();
+    return inserted;
+  }
   function update(col, id, patch) {
     ensure(); var arr = state[col] || [];
     for (var i = 0; i < arr.length; i++) { if (arr[i].id === id) { for (var k in patch) arr[i][k] = patch[k]; persist(); return arr[i]; } }
@@ -610,7 +624,7 @@
   }
 
   root.DB = {
-    init: ensure, all: all, get: get, insert: insert, update: update, remove: remove,
+    init: ensure, all: all, get: get, insert: insert, insertBatch: insertBatch, update: update, remove: remove,
     recordSale: recordSale, recordPurchase: recordPurchase, adjustStock: adjustStock,
     applyPayment: applyPayment, receiveOnOrder: receiveOnOrder,
     orderStatus: orderStatus, dashboard: dashboard, salesTrend: salesTrend, stockWarnings: stockWarnings,
