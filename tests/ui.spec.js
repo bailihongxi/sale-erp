@@ -803,6 +803,35 @@ async function run() {
   i6.click(i6.$('#prodCatFilter'));
   check('切回全部后恢复所有商品', i6.$$('#prodBody tr').length === i6.DB.all('products').length);
   check('分类筛选全程无 JS 错误', i6.errors.length === 0, i6.errors.join(' | '));
+
+  section('I7 手机端商品管理功能同步（响应式验证）');
+  var i7 = boot({ hash: '#products', width: 390, height: 844 });
+  check('手机端有批量导入按钮', /批量导入/.test(i7.$('#view').textContent));
+  check('手机端有分类下拉菜单 #prodCat', !!i7.$('#prodCat'));
+  check('手机端有筛选按钮 #prodCatFilter', !!i7.$('#prodCatFilter'));
+  check('手机端有搜索框 #prodKw', !!i7.$('#prodKw'));
+  check('手机端无旧 .cats 容器', !i7.$('.cats'));
+  check('手机端有卡片容器 #prodCards', !!i7.$('#prodCards'));
+  check('手机端卡片数 = 商品数', i7.$$('#prodCards .product-card').length === i7.DB.all('products').length);
+  // 手机端分类筛选功能
+  var i7cats = Array.from(new Set(i7.DB.all('products').map(function (p) { return p.category; }).filter(Boolean)));
+  var i7target = i7cats[0];
+  var i7expected = i7.DB.all('products').filter(function (p) { return p.category === i7target; }).length;
+  i7.$('#prodCat').value = i7target; i7.fire(i7.$('#prodCat'), 'change');
+  i7.click(i7.$('#prodCatFilter'));
+  check('手机端筛选后卡片数 = 该分类商品数', i7.$$('#prodCards .product-card').length === i7expected,
+    'cards=' + i7.$$('#prodCards .product-card').length + ' expected=' + i7expected);
+  // 手机端批量导入弹窗
+  i7.App.openBatchImport();
+  check('手机端弹窗有选择CSV文件按钮', /选择CSV文件/.test(i7.$('#modalBody').textContent));
+  check('手机端弹窗有下载CSV模板按钮', /下载 CSV 模板/.test(i7.$('#modalBody').textContent));
+  check('手机端弹窗有文件选择器 #batchFile', !!i7.$('#batchFile'));
+  check('手机端弹窗有文本域 #batchArea', !!i7.$('#batchArea'));
+  check('手机端商品管理全程无 JS 错误', i7.errors.length === 0, i7.errors.join(' | '));
+  // CSS 验证
+  var i7css = helpers.read('assets/style.css');
+  check('CSS 含手机端 .prod-filter 样式', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.prod-filter/.test(i7css));
+  check('CSS 含手机端 #prodCat 样式', /@media[\s\S]*max-width:\s*768px[\s\S]*?#prodCat/.test(i7css));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */
