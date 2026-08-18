@@ -913,6 +913,52 @@ async function run() {
   i12.click(i12.$('#prodSearchBtn'));
   check('搜索按钮可重置关键词并按类型筛选', i12.$$('#prodBody tr').length === expectedByType);
   check('类型筛选全程无 JS 错误', i12.errors.length === 0, i12.errors.join(' | '));
+
+  section('I13 商品重名检测与导入去重');
+  // 1. 列表标红重复项
+  var i13 = boot({ hash: '#products' });
+  check('无重名时无 dup-name 元素', i13.$$('.dup-name').length === 0);
+  // 插入一个重名商品
+  var firstP = i13.DB.all('products')[0];
+  i13.DB.insert('products', { name: firstP.name, brand: '重复', model: 'DUP', type: firstP.type, unit: '台', priceWholesale: 10, priceRetail: 20, stock: 5, lowStock: 2 });
+  i13.go('products');
+  check('有重名时出现 dup-name 标红元素', i13.$$('.dup-name').length >= 2, 'dup count=' + i13.$$('.dup-name').length);
+  check('重名时标题显示重名数量标签', /重名/.test(i13.$('#view').textContent));
+  check('重名时出现合并按钮', /合并重名商品/.test(i13.$('#view').textContent));
+  // 2. 合并重复项
+  var beforeStock = firstP.stock + 5; // 原库存 + 重复项库存
+  i13.App.mergeDuplicateProducts();
+  check('合并后重名商品只剩1条', i13.DB.all('products').filter(function (p) { return p.name === firstP.name; }).length === 1);
+  var mergedP = i13.DB.all('products').filter(function (p) { return p.name === firstP.name; })[0];
+  check('合并后库存累加', mergedP.stock === beforeStock, 'stock=' + mergedP.stock + ' expected=' + beforeStock);
+  check('合并后无 dup-name 元素', i13.$$('.dup-name').length === 0);
+  // 3. 导入去重：与现有商品同名的跳过
+  var i13b = boot({ hash: '#products' });
+  var existName = i13b.DB.all('products')[0].name;
+  var beforeCount = i13b.DB.all('products').length;
+  i13b.App.openBatchImport();
+  i13b.$('#batchArea').value = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存\n' +
+    existName + ',重复品牌,重复型号,类型X,台,1,2,3,4\n' +
+    '全新商品不重复,新品牌,新型号,新类型,台,10,20,5,10';
+  i13b.App.doBatchImport();
+  check('导入时跳过与现有商品同名的项', i13b.DB.all('products').length === beforeCount + 1,
+    'count=' + i13b.DB.all('products').length + ' expected=' + (beforeCount + 1));
+  check('全新商品导入成功', i13b.DB.all('products').filter(function (p) { return p.name === '全新商品不重复'; }).length === 1);
+  // 4. 导入内去重：同一批次内重复名称只导入第一条
+  var i13c = boot({ hash: '#products' });
+  var beforeC = i13c.DB.all('products').length;
+  i13c.App.openBatchImport();
+  i13c.$('#batchArea').value = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存\n' +
+    '批次内重复A,品牌1,型号1,类型1,台,1,2,3,4\n' +
+    '批次内重复A,品牌2,型号2,类型2,台,5,6,7,8\n' +
+    '批次内唯一B,品牌3,型号3,类型3,台,9,10,11,12';
+  i13c.App.doBatchImport();
+  check('批次内重复名称只导入1条', i13c.DB.all('products').filter(function (p) { return p.name === '批次内重复A'; }).length === 1);
+  check('批次内唯一商品正常导入', i13c.DB.all('products').filter(function (p) { return p.name === '批次内唯一B'; }).length === 1);
+  check('批次内去重后总数正确', i13c.DB.all('products').length === beforeC + 2,
+    'count=' + i13c.DB.all('products').length + ' expected=' + (beforeC + 2));
+  check('重名处理全程无 JS 错误', i13.errors.length + i13b.errors.length + i13c.errors.length === 0,
+    [i13.errors, i13b.errors, i13c.errors].map(function (x) { return x.join('|'); }).join(' / '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */

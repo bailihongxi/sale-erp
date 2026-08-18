@@ -235,6 +235,12 @@
     var PAGE_SIZE = 50;
     var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '', type: '全部', page: 1 });
     var types = Array.from(new Set(list.map(function (p) { return p.type; }).filter(Boolean)));
+    // 计算重复名称集合（全量统计，不受分页/筛选影响）
+    var nameCount = {};
+    list.forEach(function (p) { var n = (p.name || '').trim(); if (n) nameCount[n] = (nameCount[n] || 0) + 1; });
+    var dupNames = {};
+    Object.keys(nameCount).forEach(function (n) { if (nameCount[n] > 1) dupNames[n] = true; });
+    var dupCount = Object.keys(dupNames).length;
 
     var hasProd = list.length > 0;
     var typeOptions = ['全部'].concat(types).map(function (t) {
@@ -250,8 +256,10 @@
           actions: '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增第一个商品</button>' });
 
     app.innerHTML =
-      '<div class="view-head"><h2>商品管理</h2><span class="sub">共 ' + list.length + ' 个商品</span>' +
+      '<div class="view-head"><h2>商品管理</h2><span class="sub">共 ' + list.length + ' 个商品' +
+        (dupCount > 0 ? '　<span class="tag tag--warning">⚠️ ' + dupCount + ' 个重名</span>' : '') + '</span>' +
       '<div class="spacer"></div>' +
+      (dupCount > 0 ? '<button class="btn btn--sm btn--warning" onclick="App.mergeDuplicateProducts()">🔧 合并重名商品</button>' : '') +
       '<button class="btn" onclick="App.openBatchImport()">📥 批量导入</button>' +
       '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button></div>' +
       (hasProd ? '<div class="prod-filter">' +
@@ -322,15 +330,19 @@
       if (body) {
         body.innerHTML = pageData.map(function (p) {
           var low = p.stock <= (p.lowStock || DB.settings().lowStock);
-          return '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
+          var isDup = dupNames[(p.name || '').trim()];
+          var nameHtml = isDup ? '<b class="dup-name" title="存在重名商品">' + esc(p.name) + '</b>' : '<b>' + esc(p.name) + '</b>';
+          return '<tr><td>' + nameHtml + '</td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
         }).join('') || '<tr><td colspan="9" class="empty">没有匹配的商品</td></tr>';
       }
       var cards = $('#prodCards');
       if (cards) {
         cards.innerHTML = pageData.map(function (p) {
+          var isDup = dupNames[(p.name || '').trim()];
+          var nameHtml = isDup ? '<span class="product-card__name dup-name" title="存在重名商品">' + esc(p.name) + '</span>' : '<span class="product-card__name">' + esc(p.name) + '</span>';
           return '<div class="product-card" data-id="' + p.id + '">' +
             '<div class="product-card__row">' +
-              '<span class="product-card__name">' + esc(p.name) + '</span>' +
+              nameHtml +
               '<span class="muted">' + esc(p.type || '') + '</span>' +
             '</div>' +
             '<div class="product-card__row">' +
@@ -382,6 +394,45 @@
   window.App.delProduct = function (id) {
     if (!confirm('确定删除该商品？')) return;
     DB.remove('products', id); toast('已删除', 'ok'); route();
+  };
+  /** 合并重名商品：同名商品保留第一条，库存/价格累加到保留项，删除其余重复项 */
+  window.App.mergeDuplicateProducts = function () {
+    var all = DB.all('products');
+    var groups = {};
+    all.forEach(function (p) {
+      var n = (p.name || '').trim();
+      if (!n) return;
+      if (!groups[n]) groups[n] = [];
+      groups[n].push(p);
+    });
+    var merged = 0, removed = 0;
+    Object.keys(groups).forEach(function (name) {
+      var group = groups[name];
+      if (group.length <= 1) return;
+      // 保留第一条，累加库存和价格（取加权平均价）
+      var keep = group[0];
+      var totalStock = keep.stock || 0;
+      var totalCost = (keep.priceWholesale || 0) * (keep.stock || 0);
+      for (var i = 1; i < group.length; i++) {
+        var p = group[i];
+        totalStock += (p.stock || 0);
+        totalCost += (p.priceWholesale || 0) * (p.stock || 0);
+        DB.remove('products', p.id);
+        removed++;
+      }
+      var avgPrice = totalStock > 0 ? totalCost / totalStock : keep.priceWholesale || 0;
+      DB.update('products', keep.id, {
+        stock: totalStock,
+        priceWholesale: Math.round(avgPrice * 100) / 100
+      });
+      merged++;
+    });
+    if (removed > 0) {
+      toast('已合并 ' + merged + ' 组重名商品，删除 ' + removed + ' 条重复项', 'ok');
+    } else {
+      toast('没有重名商品需要合并', 'ok');
+    }
+    route();
   };
   /** 批量导入商品（CSV / TSV / JSON） */
   window.App.openBatchImport = function () {
@@ -505,15 +556,27 @@
         }
       }
     }
-    var created = 0, skipped = 0;
+    var created = 0, skipped = 0, dupSkipped = 0;
     var toInsert = [];
+    // 现有商品名称集合，用于导入去重
+    var existNames = {};
+    DB.all('products').forEach(function (p) { existNames[(p.name || '').trim()] = true; });
+    var importNames = {}; // 本次导入内已出现的名称
     for (var ri = 0; ri < rows.length; ri++) {
       var row = rows[ri];
       if (!row.name || !String(row.name).trim()) {
         errors.push('第 ' + (ri + 1) + ' 行缺少商品名称'); skipped++; continue;
       }
+      var nm = String(row.name).trim();
+      // 导入去重：与现有商品同名，或本次导入内重复，均跳过
+      if (existNames[nm] || importNames[nm]) {
+        dupSkipped++; skipped++;
+        errors.push('第 ' + (ri + 1) + ' 行「' + nm + '」名称重复，已跳过');
+        continue;
+      }
+      importNames[nm] = true;
       toInsert.push({
-        name: String(row.name).trim(),
+        name: nm,
         brand: String(row.brand || '').trim(),
         model: String(row.model || '').trim(),
         type: String(row.type || '').trim(),
