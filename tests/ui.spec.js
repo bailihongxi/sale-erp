@@ -602,9 +602,9 @@ async function run() {
   check('商品页有「批量导入」按钮', /批量导入/.test(i1.$('#view').textContent));
   i1.App.openBatchImport();
   check('点击后打开导入弹窗并含文本域', !!i1.$('#batchArea'));
-  var csv = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存\n' +
-    '测试导入A,品牌A,型号A,类型A,分类A,台,100,150,5,20\n' +
-    '测试导入B,品牌B,型号B,类型B,分类B,台,200,250,5,30';
+  var csv = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存\n' +
+    '测试导入A,品牌A,型号A,类型A,台,100,150,5,20\n' +
+    '测试导入B,品牌B,型号B,类型B,台,200,250,5,30';
   i1.$('#batchArea').value = csv;
   i1.App.doBatchImport();
   check('CSV 导入新增 2 个商品', i1.DB.all('products').filter(function (p) { return p.name.indexOf('测试导入') >= 0; }).length === 2,
@@ -645,7 +645,7 @@ async function run() {
   i1t.App.chooseCsvFile();
   check('chooseCsvFile 触发了文件选择器点击', clicked);
   // loadCsvFile：模拟 FileReader 同步读取文件内容并填入文本框
-  var csvContent = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存\n测试文件商品,品牌X,型号X,类型X,分类X,台,50,80,5,15\n';
+  var csvContent = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存\n测试文件商品,品牌X,型号X,类型X,台,50,80,5,15\n';
   var mockFile = { name: 'test.csv', size: csvContent.length };
   var origFileReader = i1t.window.FileReader;
   i1t.window.FileReader = function () {
@@ -780,47 +780,44 @@ async function run() {
     i5.$$('#prodCards .product-card').length + ' vs ' + prodCount);
   check('商品卡片布局全程无 JS 错误', i5.errors.length === 0, i5.errors.join(' | '));
 
-  section('I6 商品管理分类下拉筛选');
+  section('I6 商品管理分类字段已移除');
   var i6 = boot({ hash: '#products' });
-  check('商品页有分类下拉菜单 #prodCat', !!i6.$('#prodCat'));
-  check('商品页有筛选按钮 #prodCatFilter', !!i6.$('#prodCatFilter'));
-  check('不再使用 chip 分类按钮（.cats 容器不存在）', !i6.$('.cats'));
-  var catSelect = i6.$('#prodCat');
-  var allCats = Array.from(new Set(i6.DB.all('products').map(function (p) { return p.category; }).filter(Boolean)));
-  check('下拉选项数 = 分类数 + 1（全部）', catSelect.options.length === allCats.length + 1,
-    'options=' + catSelect.options.length + ' cats=' + allCats.length);
-  check('下拉首项为「全部」', catSelect.options[0].value === '全部' && catSelect.options[0].text === '全部');
-  // 选择某个分类后点筛选，验证过滤生效
-  var targetCat = allCats[0];
-  var expectedCount = i6.DB.all('products').filter(function (p) { return p.category === targetCat; }).length;
-  catSelect.value = targetCat; i6.fire(catSelect, 'change');
-  i6.click(i6.$('#prodCatFilter'));
-  check('筛选后表格行数 = 该分类商品数', i6.$$('#prodBody tr').length === expectedCount,
-    'rows=' + i6.$$('#prodBody tr').length + ' expected=' + expectedCount);
-  check('筛选后卡片数 = 该分类商品数', i6.$$('#prodCards .product-card').length === expectedCount);
-  // 切回全部
-  catSelect.value = '全部'; i6.fire(catSelect, 'change');
-  i6.click(i6.$('#prodCatFilter'));
-  check('切回全部后恢复所有商品', i6.$$('#prodBody tr').length === i6.DB.all('products').length);
-  check('分类筛选全程无 JS 错误', i6.errors.length === 0, i6.errors.join(' | '));
+  check('商品页无分类下拉菜单 #prodCat', !i6.$('#prodCat'));
+  check('商品页无分类筛选按钮 #prodCatFilter', !i6.$('#prodCatFilter'));
+  check('商品页无 .cats 容器', !i6.$('.cats'));
+  var i6ths = i6.$$('#view table th').map(function (e) { return e.textContent; });
+  check('表格表头无「分类」列', i6ths.indexOf('分类') < 0, i6ths.join(','));
+  check('表格列数 = 9（无分类列）', i6ths.length === 9, i6ths.length);
+  // 编辑商品弹窗无分类字段
+  i6.App.editProduct();
+  check('编辑弹窗无分类输入框 #f_cat', !i6.$('#f_cat'));
+  check('编辑弹窗无 catList datalist', !i6.$('#catList'));
+  i6.App.closeModal();
+  // 批量导入模板无分类列
+  i6.App.openBatchImport();
+  check('导入说明文字无「分类」', !/分类/.test(i6.$('#modalBody').textContent));
+  i6.App.closeModal();
+  // POS页面无分类筛选
+  i6.go('pos');
+  check('POS页无分类筛选容器 #posCats', !i6.$('#posCats'));
+  // 库存页无分类列
+  i6.go('inventory');
+  var i6invThs = i6.$$('#invBody').length ? [] : [];
+  check('库存页表头无「分类」列', !/分类/.test(i6.$('#view').textContent));
+  check('分类移除全程无 JS 错误', i6.errors.length === 0, i6.errors.join(' | '));
 
   section('I7 手机端商品管理功能同步（响应式验证）');
   var i7 = boot({ hash: '#products', width: 390, height: 844 });
   check('手机端有批量导入按钮', /批量导入/.test(i7.$('#view').textContent));
-  check('手机端有分类下拉菜单 #prodCat', !!i7.$('#prodCat'));
-  check('手机端有筛选按钮 #prodCatFilter', !!i7.$('#prodCatFilter'));
+  check('手机端无分类下拉菜单', !i7.$('#prodCat'));
   check('手机端有搜索框 #prodKw', !!i7.$('#prodKw'));
-  check('手机端无旧 .cats 容器', !i7.$('.cats'));
+  check('手机端无 .cats 容器', !i7.$('.cats'));
   check('手机端有卡片容器 #prodCards', !!i7.$('#prodCards'));
   check('手机端卡片数 = 商品数', i7.$$('#prodCards .product-card').length === i7.DB.all('products').length);
-  // 手机端分类筛选功能
-  var i7cats = Array.from(new Set(i7.DB.all('products').map(function (p) { return p.category; }).filter(Boolean)));
-  var i7target = i7cats[0];
-  var i7expected = i7.DB.all('products').filter(function (p) { return p.category === i7target; }).length;
-  i7.$('#prodCat').value = i7target; i7.fire(i7.$('#prodCat'), 'change');
-  i7.click(i7.$('#prodCatFilter'));
-  check('手机端筛选后卡片数 = 该分类商品数', i7.$$('#prodCards .product-card').length === i7expected,
-    'cards=' + i7.$$('#prodCards .product-card').length + ' expected=' + i7expected);
+  // 手机端搜索过滤
+  i7.$('#prodKw').value = '海尔'; i7.fire(i7.$('#prodKw'), 'input');
+  check('手机端搜索后卡片数减少', i7.$$('#prodCards .product-card').length < i7.DB.all('products').length);
+  i7.$('#prodKw').value = ''; i7.fire(i7.$('#prodKw'), 'input');
   // 手机端批量导入弹窗
   i7.App.openBatchImport();
   check('手机端弹窗有选择CSV文件按钮', /选择CSV文件/.test(i7.$('#modalBody').textContent));
@@ -831,7 +828,6 @@ async function run() {
   // CSS 验证
   var i7css = helpers.read('assets/style.css');
   check('CSS 含手机端 .prod-filter 样式', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.prod-filter/.test(i7css));
-  check('CSS 含手机端 #prodCat 样式', /@media[\s\S]*max-width:\s*768px[\s\S]*?#prodCat/.test(i7css));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */

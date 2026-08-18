@@ -232,11 +232,9 @@
   views.products = function () {
     document.getElementById('viewTitle').textContent = '商品管理';
     var list = DB.all('products');
-    var cats = Array.from(new Set(list.map(function (p) { return p.category; }).filter(Boolean)));
-    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '', cat: '全部' });
+    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '' });
 
     var rows = list.filter(function (p) {
-      if (filter.cat !== '全部' && p.category !== filter.cat) return false;
       if (filter.kw && (p.name + p.brand + p.model + p.type).toLowerCase().indexOf(filter.kw.toLowerCase()) < 0) return false;
       return true;
     }).map(function (p) {
@@ -246,23 +244,18 @@
         '<td>' + esc(p.brand) + '</td>' +
         '<td>' + esc(p.model) + '</td>' +
         '<td>' + esc(p.type) + '</td>' +
-        '<td>' + esc(p.category) + '</td>' +
         '<td>' + esc(p.unit) + '</td>' +
         '<td class="mono">' + money(p.priceWholesale) + '</td>' +
         '<td class="mono">' + money(p.priceRetail) + '</td>' +
         '<td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td>' +
         '<td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td>' +
         '</tr>';
-    }).join('') || '<tr><td colspan="10" class="empty">没有匹配的商品</td></tr>';
-
-    var catOptions = ['全部'].concat(cats).map(function (c) {
-      return '<option value="' + esc(c) + '"' + (filter.cat === c ? ' selected' : '') + '>' + esc(c) + '</option>';
-    }).join('');
+    }).join('') || '<tr><td colspan="9" class="empty">没有匹配的商品</td></tr>';
 
     var hasProd = list.length > 0;
     var bodyBlock = hasProd
       ? '<div class="card prod-table"><table class="table"><thead><tr>' +
-        '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>分类</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
+        '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
         '</tr></thead><tbody id="prodBody"></tbody></table></div>' +
         '<div class="prod-cards" id="prodCards"></div>'
       : emptyGuide({ ico: '📦', title: '还没有商品', desc: '新增第一个商品，开始管理你的库存',
@@ -275,22 +268,15 @@
       '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button></div>' +
       (hasProd ? '<div class="prod-filter">' +
         '<div class="search"><span>🔍</span><input id="prodKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(filter.kw) + '"/></div>' +
-        '<select id="prodCat">' + catOptions + '</select>' +
-        '<button class="btn btn--sm" id="prodCatFilter">筛选</button>' +
         '</div>' : '') +
       bodyBlock;
 
     if (hasProd) {
       $('#prodKw').addEventListener('input', function (e) { filter.kw = e.target.value; renderProdRows(); });
-      $('#prodCatFilter').addEventListener('click', function () {
-        filter.cat = $('#prodCat').value;
-        renderProdRows();
-      });
     }
     renderProdRows();
     function renderProdRows() {
       var filtered = list.filter(function (p) {
-        if (filter.cat !== '全部' && p.category !== filter.cat) return false;
         if (filter.kw && (p.name + p.brand + p.model + p.type).toLowerCase().indexOf(filter.kw.toLowerCase()) < 0) return false;
         return true;
       });
@@ -298,8 +284,8 @@
       if (body) {
         body.innerHTML = filtered.map(function (p) {
           var low = p.stock <= (p.lowStock || DB.settings().lowStock);
-          return '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.category) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
-        }).join('') || '<tr><td colspan="10" class="empty">没有匹配的商品</td></tr>';
+          return '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
+        }).join('') || '<tr><td colspan="9" class="empty">没有匹配的商品</td></tr>';
       }
       var cards = $('#prodCards');
       if (cards) {
@@ -309,7 +295,7 @@
             '<div class="product-card__title">' + esc(p.name) + '</div>' +
             '<div class="product-card__row">' +
               '<span class="muted">' + esc(p.brand || '') + '</span>' +
-              '<span class="muted">' + esc(p.category || '') + '</span>' +
+              '<span class="muted">' + esc(p.type || '') + '</span>' +
             '</div>' +
             '<div class="product-card__row">' +
               '<span>进货价：' + money(p.priceWholesale) + '</span>' +
@@ -332,8 +318,6 @@
   window.App = window.App || {};
   window.App.editProduct = function (id) {
     var p = id ? DB.get('products', id) : null;
-    var catList = Array.from(new Set(DB.all('products').map(function (x) { return x.category; }).filter(Boolean)));
-    var dl = '<datalist id="catList">' + catList.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>';
     var f = function (k, v) { return p ? p[k] : (v || ''); };
     var body =
       '<div class="field"><label>商品名称 *</label><input id="f_name" value="' + esc(f('name')) + '"/></div>' +
@@ -341,9 +325,8 @@
       '<div class="field"><label>品牌</label><input id="f_brand" value="' + esc(f('brand')) + '"/></div>' +
       '<div class="field"><label>型号</label><input id="f_model" value="' + esc(f('model')) + '"/></div>' +
       '</div>' +
-      '<div class="grid grid--3">' +
+      '<div class="grid grid--2">' +
       '<div class="field"><label>类型</label><input id="f_type" value="' + esc(f('type')) + '"/></div>' +
-      '<div class="field"><label>分类</label><input id="f_cat" list="catList" value="' + esc(f('category')) + '"/></div>' +
       '<div class="field"><label>单位</label><input id="f_unit" value="' + esc(f('unit', '台')) + '"/></div>' +
       '</div>' +
       '<div class="grid grid--3">' +
@@ -351,14 +334,14 @@
       '<div class="field"><label>零售价</label><input id="f_pr" type="number" value="' + esc(f('priceRetail', 0)) + '"/></div>' +
       '<div class="field"><label>低库存阈值</label><input id="f_low" type="number" value="' + esc(f('lowStock', 10)) + '"/></div>' +
       '</div>' +
-      '<div class="field"><label>当前库存</label><input id="f_stock" type="number" value="' + esc(f('stock', 0)) + '"/></div>' + dl;
+      '<div class="field"><label>当前库存</label><input id="f_stock" type="number" value="' + esc(f('stock', 0)) + '"/></div>';
     openModal(p ? '编辑商品' : '新增商品', body,
       '<button class="btn" onclick="App.closeModal()">取消</button><button class="btn btn--primary" onclick="App.saveProduct(\'' + (id || '') + '\')">保存</button>');
   };
   window.App.saveProduct = function (id) {
     var data = {
       name: $('#f_name').value.trim(), brand: $('#f_brand').value.trim(), model: $('#f_model').value.trim(),
-      type: $('#f_type').value.trim(), category: $('#f_cat').value.trim(), unit: $('#f_unit').value.trim() || '台',
+      type: $('#f_type').value.trim(), unit: $('#f_unit').value.trim() || '台',
       priceWholesale: parseFloat($('#f_pw').value) || 0, priceRetail: parseFloat($('#f_pr').value) || 0,
       lowStock: parseInt($('#f_low').value) || 0, stock: parseInt($('#f_stock').value) || 0
     };
@@ -372,7 +355,7 @@
   };
   /** 批量导入商品（CSV / TSV / JSON） */
   window.App.openBatchImport = function () {
-    var sample = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存\n美的空调 KFR-35GW,美的,KFR-35GW,空调,空调,台,1899,2299,10,20\n九阳豆浆机 JYDZ,九阳,JYDZ,小家电,厨电,台,199,299,5,30';
+    var sample = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存\n美的空调 KFR-35GW,美的,KFR-35GW,空调,台,1899,2299,10,20\n九阳豆浆机 JYDZ,九阳,JYDZ,小家电,台,199,299,5,30';
     var body =
       '<div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">' +
       '<button class="btn btn--sm" onclick="App.chooseCsvFile()">📂 选择CSV文件</button>' +
@@ -381,7 +364,7 @@
       '<span class="muted" style="font-size:12px;align-self:center">先下载模板编辑，再选择CSV文件将内容载入下方文本框</span>' +
       '</div>' +
       '<div class="field"><label>粘贴 CSV / TSV / JSON</label><textarea id="batchArea" rows="10" placeholder="' + esc(sample) + '"></textarea></div>' +
-      '<div class="muted" style="font-size:12px;margin-top:6px">支持 CSV（逗号分隔，可含表头）、TSV（制表符分隔）或 JSON 数组。表头可用「商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存」或对应英文 key；无表头时按此顺序解析。</div>';
+      '<div class="muted" style="font-size:12px;margin-top:6px">支持 CSV（逗号分隔，可含表头）、TSV（制表符分隔）或 JSON 数组。表头可用「商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存」或对应英文 key；无表头时按此顺序解析。</div>';
     openModal('批量导入商品', body,
       '<button class="btn" onclick="App.closeModal()">取消</button>' +
       '<button class="btn btn--primary" onclick="App.doBatchImport()">开始导入</button>');
@@ -389,10 +372,10 @@
 
   /** 生成商品批量导入 CSV 模板文本（表头 + 2 行示例，不含 BOM） */
   function csvTemplateText() {
-    var header = '商品名称,品牌,型号,类型,分类,单位,批发价,零售价,低库存阈值,库存';
+    var header = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存';
     var rows = [
-      '示例-美的空调,美的,KFR-35GW,空调,空调,台,1899,2299,10,20',
-      '示例-九阳豆浆机,九阳,JYDZ,小家电,厨电,台,199,299,5,30'
+      '示例-美的空调,美的,KFR-35GW,空调,台,1899,2299,10,20',
+      '示例-九阳豆浆机,九阳,JYDZ,小家电,台,199,299,5,30'
     ];
     return header + '\n' + rows.join('\n') + '\n';
   }
@@ -458,13 +441,12 @@
       var lines = raw.split(/\r?\n/).filter(function (l) { return l.trim(); });
       if (lines.length === 0) { errors.push('没有有效行'); }
       else {
-        var keys = ['name','brand','model','type','category','unit','priceWholesale','priceRetail','lowStock','stock'];
+        var keys = ['name','brand','model','type','unit','priceWholesale','priceRetail','lowStock','stock'];
         var aliases = {
           name: ['商品名称','name','名称'],
           brand: ['品牌','brand'],
           model: ['型号','model'],
           type: ['类型','type'],
-          category: ['分类','category'],
           unit: ['单位','unit'],
           priceWholesale: ['批发价','priceWholesale','进货价','成本价'],
           priceRetail: ['零售价','priceRetail','售价','price','sellPrice'],
@@ -504,7 +486,6 @@
         brand: String(row.brand || '').trim(),
         model: String(row.model || '').trim(),
         type: String(row.type || '').trim(),
-        category: String(row.category || '').trim(),
         unit: String(row.unit || '').trim() || '台',
         priceWholesale: parseFloat(row.priceWholesale) || 0,
         priceRetail: parseFloat(row.priceRetail) || 0,
@@ -521,28 +502,20 @@
   };
 
   /* ---------- 销售开单（POS） ---------- */
-  var pos = { items: {}, customerId: null, discount: 0, paid: 0, method: '现金', kw: '', cat: '全部' };
+  var pos = { items: {}, customerId: null, discount: 0, paid: 0, method: '现金', kw: '' };
   views.pos = function () {
     document.getElementById('viewTitle').textContent = '销售开单';
-    var prods = DB.all('products');
-    var cats = ['全部'].concat(Array.from(new Set(prods.map(function (p) { return p.category; }).filter(Boolean))));
-    var chips = cats.map(function (c) { return '<button class="chip ' + (pos.cat === c ? 'active' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>'; }).join('');
-
     app.innerHTML =
       '<div class="view-head"><h2>销售开单</h2><span class="sub">选商品 → 填数量 → 结算（支持欠款/多单位）</span></div>' +
       '<div class="pos">' +
       '<div class="card cart" id="posCart"></div>' +
       '<div class="card card__pad">' +
       '<div class="search" style="margin-bottom:10px"><span>🔍</span><input id="posKw" placeholder="搜索商品名称/品牌/型号/类型"/></div>' +
-      '<div class="cats" id="posCats">' + chips + '</div>' +
       '<div class="prod-grid" id="posGrid"></div>' +
       '</div>' +
       '</div>';
 
     $('#posKw').addEventListener('input', function (e) { pos.kw = e.target.value; filterPos(); });
-    $('#posCats').querySelectorAll('.chip').forEach(function (c) {
-      c.addEventListener('click', function () { pos.cat = c.getAttribute('data-cat'); renderPosGrid(); });
-    });
     renderPosGrid(); renderPosCart();
   };
   /** 搜索范围与商品管理保持一致：名称 + 品牌 + 型号 + 类型（MNR-08） */
@@ -556,10 +529,7 @@
   function renderPosGrid() {
     var grid = $('#posGrid');
     if (!grid) return;
-    var prods = DB.all('products').filter(function (p) {
-      if (pos.cat !== '全部' && p.category !== pos.cat) return false;
-      return true;
-    });
+    var prods = DB.all('products');
     grid.innerHTML = prods.map(function (p) {
       var s = ((p.name || '') + (p.brand || '') + (p.model || '') + (p.type || '')).toLowerCase();
       return '<div class="prod-card" data-pid="' + p.id + '" data-s="' + esc(s) + '">' +
@@ -1104,7 +1074,7 @@
     var prods = DB.all('products');
     var hasProd = prods.length > 0;
     var stockCard = hasProd
-      ? card('实时库存（<span id="invCount"></span>）', '<table class="table"><thead><tr><th>商品</th><th>分类</th><th>单位</th><th>库存</th><th>阈值</th><th class="right">操作</th></tr></thead><tbody id="invBody"></tbody></table>')
+      ? card('实时库存（<span id="invCount"></span>）', '<table class="table"><thead><tr><th>商品</th><th>单位</th><th>库存</th><th>阈值</th><th class="right">操作</th></tr></thead><tbody id="invBody"></tbody></table>')
       : emptyGuide({ ico: '🏬', title: '还没有库存', desc: '先去新增商品并进货，库存会自动汇总到这里',
           actions: '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button>' });
 
@@ -1135,13 +1105,12 @@
         var low = p.stock <= (p.lowStock || thr);
         return '<tr data-pid="' + p.id + '">' +
           '<td><b>' + esc(p.name) + '</b></td>' +
-          '<td>' + esc(p.category) + '</td>' +
           '<td>' + esc(p.unit) + '</td>' +
           '<td class="mono">' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td>' +
           '<td class="muted">' + (p.lowStock || thr) + '</td>' +
           '<td class="right"><button class="btn btn--sm" onclick="App.adjustStock(\'' + p.id + '\')">调整</button></td>' +
           '</tr>';
-      }).join('') || '<tr class="empty-row"><td colspan="6" class="empty">没有匹配的库存</td></tr>';
+      }).join('') || '<tr class="empty-row"><td colspan="5" class="empty">没有匹配的库存</td></tr>';
       body.innerHTML = rows;
       var cnt = $('#invCount'); if (cnt) cnt.textContent = prods.length;
       var sub = $('#invSub'); if (sub) sub.textContent = '实时库存 · 低库存预警 ' + DB.stockWarnings().length + ' 项 · 出入库流水';
