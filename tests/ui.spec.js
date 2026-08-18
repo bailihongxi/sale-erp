@@ -778,6 +778,24 @@ async function run() {
   i3.$('#puKw').value = '';
   i3.fire(i3.$('#puKw'), 'input');
   check('清空关键词后下拉隐藏', !i3.$('#puSuggest').classList.contains('show'));
+  // 搜索建议分页加载：插入30个匹配商品，验证初始20条+加载更多
+  for (var pi = 0; pi < 30; pi++) {
+    i3.DB.insert('products', { name: '分页测试商品' + pi, brand: 'B', model: 'M' + pi, type: 'T', unit: '台', priceWholesale: 1, priceRetail: 2, stock: 1, lowStock: 1 });
+  }
+  i3.App.openPurchaseForm();
+  i3.$('#puKw').value = '分页测试商品';
+  i3.fire(i3.$('#puKw'), 'input');
+  check('匹配30条时初始显示20条', i3.$$('#puSuggest .pu-suggest__item').length === 20,
+    'items=' + i3.$$('#puSuggest .pu-suggest__item').length);
+  check('匹配>20条时显示加载更多按钮', !!i3.$('#puSuggest .pu-suggest__more'),
+    i3.$('#puSuggest').innerHTML.slice(0, 100));
+  check('加载更多按钮显示剩余条数', /还有 10 条/.test(i3.$('#puSuggest .pu-suggest__more').textContent),
+    i3.$('#puSuggest .pu-suggest__more').textContent);
+  // 点击加载更多
+  i3.fire(i3.$('#puSuggest .pu-suggest__more'), 'mousedown');
+  check('点击加载更多后显示30条', i3.$$('#puSuggest .pu-suggest__item').length === 30,
+    'items=' + i3.$$('#puSuggest .pu-suggest__item').length);
+  check('全部显示后无加载更多按钮', !i3.$('#puSuggest .pu-suggest__more'));
   // 清空商品列表，后续测试重新开始
   while (i3.$('#puItems .pu-del')) { i3.click(i3.$('#puItems .pu-del')); }
   check('清空后商品列表为空', i3.$$('#puItems tr').length === 0);

@@ -994,7 +994,7 @@
     if (!sups.length) { toast('请先到「供应商」新增一个供应商', 'err'); return; }
     var supOpts = '<option value="">选择供应商</option>' + sups.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('');
     var no = 'PO-' + today().replace(/-/g, '') + '-' + String(DB.all('purchases').length + 1).padStart(3, '0');
-    uiState.pu = { items: [], discount: 0, no: no };
+    uiState.pu = { items: [], discount: 0, no: no, suggestLimit: 20 };
     var body =
       '<div class="pu-form">' +
       '<div class="pu-form__head">' +
@@ -1045,38 +1045,55 @@
     });
     renderPuItems();
   };
-  /** 更新搜索建议下拉列表 */
+  /** 更新搜索建议下拉列表（分页加载，每页20条，最多100条） */
   function updatePuSuggest() {
     var kw = ($('#puKw') && $('#puKw').value || '').trim().toLowerCase();
     var suggest = $('#puSuggest');
     if (!suggest) return;
     if (!kw) { suggest.classList.remove('show'); suggest.innerHTML = ''; return; }
-    var matches = DB.all('products').filter(function (p) {
+    var allMatches = DB.all('products').filter(function (p) {
       return (p.name + ' ' + p.brand + ' ' + p.model + ' ' + p.type).toLowerCase().indexOf(kw) >= 0;
-    }).slice(0, 8);
+    });
+    var limit = uiState.pu.suggestLimit || 20;
+    var matches = allMatches.slice(0, limit);
     if (matches.length === 0) { suggest.classList.remove('show'); suggest.innerHTML = ''; return; }
-    suggest.innerHTML = matches.map(function (p) {
+    var html = matches.map(function (p) {
       return '<div class="pu-suggest__item" data-name="' + esc(p.name) + '">' +
         '<b>' + esc(p.name) + '</b>' +
         (p.model ? ' <span class="muted">' + esc(p.model) + '</span>' : '') +
         (p.brand ? ' <span class="muted">' + esc(p.brand) + '</span>' : '') +
         '</div>';
     }).join('');
+    // 加载更多按钮（还有未显示的匹配项时显示，最多100条）
+    if (allMatches.length > limit && limit < 100) {
+      html += '<div class="pu-suggest__more">加载更多（还有 ' + (allMatches.length - limit) + ' 条）</div>';
+    }
+    suggest.innerHTML = html;
     suggest.classList.add('show');
-    // 点击建议项填充搜索框
+    // 点击建议项填充搜索框并添加
     Array.prototype.forEach.call(suggest.querySelectorAll('.pu-suggest__item'), function (item) {
       item.addEventListener('mousedown', function (e) {
-        e.preventDefault(); // 防止input失焦
+        e.preventDefault();
         var name = this.getAttribute('data-name');
         $('#puKw').value = name;
         hidePuSuggest();
         addPuItemByKw();
       });
     });
+    // 点击加载更多
+    var moreBtn = suggest.querySelector('.pu-suggest__more');
+    if (moreBtn) {
+      moreBtn.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        uiState.pu.suggestLimit = Math.min(100, (uiState.pu.suggestLimit || 20) + 20);
+        updatePuSuggest();
+      });
+    }
   }
   function hidePuSuggest() {
     var s = $('#puSuggest');
     if (s) { s.classList.remove('show'); s.innerHTML = ''; }
+    uiState.pu.suggestLimit = 20; // 重置分页
   }
   /** 按搜索关键词添加商品：取第一个匹配的商品 */
   function addPuItemByKw() {
