@@ -332,13 +332,14 @@
       return { productId: prod.id, name: prod.name, unit: prod.unit, qty: it.qty, price: it.price, subtotal: round2(it.qty * it.price) };
     });
     var rawTotal = items.reduce(function (a, b) { return a + b.subtotal; }, 0);
-    var discount = round2(p.discount);
+    var discount = round2(p.discount || 0);
     var total = round2(Math.max(0, rawTotal - discount));
-    var paid = round2(Math.min(round2(p.paid), total));
-    var no = 'P' + todayStr().replace(/-/g, '') + Math.floor(Math.random() * 9000 + 1000);
+    var paid = round2(Math.min(round2(p.paid || 0), total));
+    var no = p.no || ('P' + todayStr().replace(/-/g, '') + Math.floor(Math.random() * 9000 + 1000));
+    var date = p.date || todayStr();
     var sup = p.supplierId ? get('suppliers', p.supplierId) : null;
     var order = {
-      id: uid(), no: no, date: todayStr(), ts: Date.now(),
+      id: uid(), no: no, date: date, ts: Date.now(),
       supplierId: p.supplierId || null,
       supplierName: (sup && sup.name) || p.supplierName || '',
       items: items, discount: discount, total: total, paid: paid, method: p.method || '银行'

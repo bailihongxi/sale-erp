@@ -986,84 +986,133 @@
     var sups = activeParties('suppliers');
     if (!sups.length) { toast('请先到「供应商」新增一个供应商', 'err'); return; }
     var supOpts = '<option value="">选择供应商</option>' + sups.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('');
-    var prodOpts = DB.all('products').map(function (p) { return '<option value="' + p.id + '">' + esc(p.name + ' (' + p.brand + ')') + '</option>'; }).join('');
-    openModal('新建进货单',
-      '<div class="field"><label>供应商</label><select id="puSup">' + supOpts + '</select></div>' +
-      '<div class="field"><label>商品行</label><div id="puRows"></div>' +
-      '<button class="btn btn--sm" onclick="App.addPuRow()">＋ 添加商品</button></div>' +
-      '<div class="field"><label>已付金额（留空=欠款）</label><input id="puPaid" type="number" value="0"/></div>' +
-      '<div class="field"><label>付款方式</label><select id="puMethod"><option>银行</option><option>微信</option><option>现金</option><option>欠款</option></select></div>' +
-      '<div id="puSum" class="settle-line total"><span>合计</span><span class="v">¥0.00</span></div>',
-      '<button class="btn" onclick="App.closeModal()">取消</button><button class="btn btn--primary" onclick="App.savePurchase()">入库并保存</button>');
-    uiState.puRows = [];
-    uiState.prodOpts = prodOpts;
-    window.App.addPuRow();
-  };
-  window.App.addPuRow = function () {
-    var rows = uiState.puRows || (uiState.puRows = []);
-    rows.push({ pid: DB.all('products')[0] ? DB.all('products')[0].id : '', qty: 1, price: 0 });
-    renderPuRows();
-  };
-  function renderPuRows() {
-    var box = $('#puRows'); if (!box) return;
-    var allProds = DB.all('products');
-    box.innerHTML = (uiState.puRows || []).map(function (r, i) {
-      return '<div class="row" style="gap:6px;margin-bottom:6px" data-i="' + i + '">' +
-        '<div style="flex:2;min-width:0">' +
-        '<input class="pu-kw" placeholder="搜索名称/品牌/型号" style="width:100%;margin-bottom:4px"/>' +
-        '<select class="pu-pid" style="width:100%"><option value="">选择商品</option></select>' +
+    var no = 'PO-' + today().replace(/-/g, '') + '-' + String(DB.all('purchases').length + 1).padStart(3, '0');
+    uiState.pu = { items: [], discount: 0, no: no };
+    var body =
+      '<div class="pu-form">' +
+      '<div class="pu-form__head">' +
+        '<div class="pu-form__title"><button class="btn btn--sm pu-back" onclick="App.closeModal()">‹</button><span>新建进货单</span></div>' +
+        '<div class="pu-form__meta">' +
+          '<div><label>单号</label><span id="puNo">' + no + '</span></div>' +
+          '<div><label>供应商</label><select id="puSup">' + supOpts + '</select></div>' +
+          '<div><label>日期</label><input id="puDate" type="date" value="' + today() + '"/></div>' +
         '</div>' +
-        '<input class="pu-qty" type="number" value="' + r.qty + '" style="width:60px" placeholder="数量"/>' +
-        '<input class="pu-price" type="number" value="' + r.price + '" style="width:80px" placeholder="单价"/>' +
-        '<button class="btn btn--sm btn--danger" onclick="App.delPuRow(' + i + ')">✕</button></div>';
-    }).join('');
-    Array.prototype.forEach.call(box.children, function (row, i) {
-      var sel = row.querySelector('.pu-pid');
-      var kwIn = row.querySelector('.pu-kw');
-      var priceIn = row.querySelector('.pu-price');
-      function buildOptions(kw) {
-        var pid = uiState.puRows[i].pid;
-        var html = allProds.filter(function (p) {
-          if (!kw) return true;
-          if (p.id === pid) return true;
-          var t = (p.name + ' ' + p.brand + ' ' + p.model + ' ' + p.type).toLowerCase();
-          return t.indexOf(kw.toLowerCase()) >= 0;
-        }).map(function (p) {
-          return '<option value="' + p.id + '"' + (p.id === pid ? ' selected' : '') + '>' + esc(p.name + ' (' + p.brand + ')') + '</option>';
-        }).join('');
-        sel.innerHTML = html || '<option value="">无匹配商品</option>';
-      }
-      buildOptions('');
-      kwIn.addEventListener('input', function (e) { buildOptions(e.target.value); });
-      sel.addEventListener('change', function (e) {
-        uiState.puRows[i].pid = e.target.value;
-        var p = DB.get('products', e.target.value);
-        if (p && priceIn && (!parseFloat(priceIn.value) || parseFloat(priceIn.value) === 0)) {
-          priceIn.value = p.priceWholesale;
-          uiState.puRows[i].price = p.priceWholesale;
-        }
-        updatePuSum();
-      });
-      row.querySelector('.pu-qty').addEventListener('input', function (e) { uiState.puRows[i].qty = parseInt(e.target.value) || 0; updatePuSum(); });
-      priceIn.addEventListener('input', function (e) { uiState.puRows[i].price = parseFloat(e.target.value) || 0; updatePuSum(); });
+      '</div>' +
+      '<div class="pu-form__search">' +
+        '<div class="search"><span>🔍</span><input id="puKw" placeholder="输入产品名称/型号，回车或点击加入"/></div>' +
+        '<button class="btn btn--primary pu-add" id="puAddBtn">添加</button>' +
+      '</div>' +
+      '<div class="pu-form__items"><table class="table"><thead><tr>' +
+        '<th>产品</th><th>规格</th><th>单价(¥)</th><th>数量</th><th>小计(¥)</th><th class="right">操作</th>' +
+      '</tr></thead><tbody id="puItems"></tbody></table>' +
+      '<div id="puEmpty" class="empty" style="padding:24px;text-align:center">尚未添加商品，在上方搜索后点击添加</div></div>' +
+      '<div class="pu-form__foot">' +
+        '<span>件数 <b id="puCount">0</b></span>' +
+        '<span>合计 <b id="puTotal">' + money(0) + '</b></span>' +
+        '<span class="pu-discount">优惠 <input id="puDiscount" type="number" min="0" step="0.01" value="0" style="width:70px"/> 元</span>' +
+        '<span>实付 <b id="puPayable">' + money(0) + '</b></span>' +
+        '<button class="btn btn--primary pu-settle" onclick="App.savePurchase()">结算入库</button>' +
+      '</div>' +
+      '</div>';
+    openModal('', body, '');
+    // 弹窗标题清空，使用自定义标题
+    document.getElementById('modalTitle').style.display = 'none';
+    // 事件绑定
+    var kw = $('#puKw');
+    kw.addEventListener('keydown', function (e) { if (e.key === 'Enter') addPuItemByKw(); });
+    $('#puAddBtn').addEventListener('click', addPuItemByKw);
+    $('#puDiscount').addEventListener('input', function (e) {
+      uiState.pu.discount = parseFloat(e.target.value) || 0;
+      updatePuFoot();
     });
-    updatePuSum();
+    renderPuItems();
+  };
+  /** 按搜索关键词添加商品：取第一个匹配的商品 */
+  function addPuItemByKw() {
+    var kw = ($('#puKw') && $('#puKw').value || '').trim().toLowerCase();
+    if (!kw) { toast('请输入产品名称或型号', 'err'); return; }
+    var all = DB.all('products');
+    var match = all.filter(function (p) {
+      return (p.name + ' ' + p.brand + ' ' + p.model + ' ' + p.type).toLowerCase().indexOf(kw) >= 0;
+    })[0];
+    if (!match) { toast('未找到匹配的商品', 'err'); return; }
+    // 已存在则数量+1
+    var exist = uiState.pu.items.filter(function (it) { return it.productId === match.id; })[0];
+    if (exist) { exist.qty++; }
+    else {
+      uiState.pu.items.push({
+        productId: match.id, name: match.name, model: match.model,
+        price: match.priceWholesale || 0, qty: 1
+      });
+    }
+    $('#puKw').value = '';
+    renderPuItems();
+    toast('已添加：' + match.name, 'ok');
   }
-  window.App.delPuRow = function (i) { uiState.puRows.splice(i, 1); renderPuRows(); };
-  function updatePuSum() {
-    var sum = (uiState.puRows || []).reduce(function (a, r) { return a + (r.qty || 0) * (r.price || 0); }, 0);
-    var el = $('#puSum'); if (el) el.innerHTML = '<span>合计</span><span class="v">' + money(sum) + '</span>';
+  function renderPuItems() {
+    var tbody = $('#puItems');
+    var empty = $('#puEmpty');
+    var items = uiState.pu.items;
+    if (!tbody) return;
+    tbody.innerHTML = items.map(function (it, i) {
+      var subtotal = DB.round2((it.price || 0) * (it.qty || 0));
+      return '<tr data-i="' + i + '">' +
+        '<td><b>' + esc(it.name) + '</b></td>' +
+        '<td>' + esc(it.model || '') + '</td>' +
+        '<td><input class="pu-price" type="number" min="0" step="0.01" value="' + it.price + '" style="width:80px"/></td>' +
+        '<td><div class="qty"><button class="pu-minus" data-i="' + i + '">−</button>' +
+          '<input class="pu-qty" type="number" min="1" value="' + it.qty + '" style="width:50px;text-align:center"/>' +
+          '<button class="pu-plus" data-i="' + i + '">+</button></div></td>' +
+        '<td class="mono">' + money(subtotal) + '</td>' +
+        '<td class="right"><button class="btn btn--sm btn--danger pu-del" data-i="' + i + '">🗑</button></td>' +
+        '</tr>';
+    }).join('');
+    if (empty) empty.style.display = items.length ? 'none' : '';
+    // 事件绑定
+    Array.prototype.forEach.call(tbody.querySelectorAll('tr'), function (row, i) {
+      row.querySelector('.pu-price').addEventListener('input', function (e) {
+        uiState.pu.items[i].price = parseFloat(e.target.value) || 0; updatePuFoot();
+      });
+      row.querySelector('.pu-qty').addEventListener('input', function (e) {
+        uiState.pu.items[i].qty = parseInt(e.target.value) || 1; updatePuFoot();
+      });
+      row.querySelector('.pu-minus').addEventListener('click', function () {
+        if (uiState.pu.items[i].qty > 1) uiState.pu.items[i].qty--;
+        renderPuItems();
+      });
+      row.querySelector('.pu-plus').addEventListener('click', function () {
+        uiState.pu.items[i].qty++; renderPuItems();
+      });
+      row.querySelector('.pu-del').addEventListener('click', function () {
+        uiState.pu.items.splice(i, 1); renderPuItems();
+      });
+    });
+    updatePuFoot();
+  }
+  function updatePuFoot() {
+    var items = uiState.pu.items;
+    var total = items.reduce(function (a, it) { return a + (it.price || 0) * (it.qty || 0); }, 0);
+    var count = items.reduce(function (a, it) { return a + (it.qty || 0); }, 0);
+    var discount = uiState.pu.discount || 0;
+    var payable = Math.max(0, DB.round2(total - discount));
+    var c = $('#puCount'); if (c) c.textContent = count;
+    var t = $('#puTotal'); if (t) t.textContent = money(total);
+    var p = $('#puPayable'); if (p) p.textContent = money(payable);
   }
   window.App.savePurchase = function () {
     var sid = $('#puSup').value;
     if (!sid) { toast('请选择供应商', 'err'); return; }
-    var items = (uiState.puRows || []).filter(function (r) { return r.pid && r.qty > 0; }).map(function (r) { return { productId: r.pid, qty: r.qty, price: r.price || 0 }; });
+    var items = uiState.pu.items.filter(function (r) { return r.productId && r.qty > 0; })
+      .map(function (r) { return { productId: r.productId, name: r.name, qty: r.qty, price: r.price || 0 }; });
     if (!items.length) { toast('请至少添加一件商品', 'err'); return; }
     var sup = DB.get('suppliers', sid);
-    var paid = parseFloat($('#puPaid').value) || 0;
-    var method = $('#puMethod').value === '欠款' ? '欠款' : $('#puMethod').value;
-    var realPaid = method === '欠款' ? 0 : paid;
-    DB.recordPurchase({ supplierId: sid, supplierName: sup.name, items: items, paid: realPaid, method: method });
+    var total = items.reduce(function (a, it) { return a + (it.price || 0) * (it.qty || 0); }, 0);
+    var discount = uiState.pu.discount || 0;
+    var payable = Math.max(0, DB.round2(total - discount));
+    DB.recordPurchase({
+      supplierId: sid, supplierName: sup.name, items: items,
+      paid: payable, method: '银行', no: uiState.pu.no, date: $('#puDate').value || today()
+    });
     closeModal(); toast('进货入库成功', 'ok'); route();
   };
 

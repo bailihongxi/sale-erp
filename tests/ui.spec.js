@@ -718,24 +718,48 @@ async function run() {
     /\.pos\s*\{[^}]*grid-template-columns:\s*380px[^1-9]*1fr/.test(i2css),
     i2css.match(/\.pos\s*\{[^}]*\}/));
 
-  section('I3 新建进货单商品搜索');
+  section('I3 新建进货单重新设计（搜索+添加+产品列表+结算）');
   var i3 = boot({ hash: '#purchase' });
   i3.App.openPurchaseForm();
-  check('进货单弹窗有商品搜索框', !!i3.$('#puRows .pu-kw'));
-  var before = i3.$$('#puRows .pu-pid option').length;
-  var kw = i3.$('#puRows .pu-kw');
-  kw.value = '海尔'; i3.fire(kw, 'input');
-  var after = i3.$$('#puRows .pu-pid option').length;
-  check('搜索后选项数量减少', after < before, 'before=' + before + ' after=' + after);
-  var i3pid = i3.DB.all('products').filter(function (p) { return p.name.indexOf('海尔') >= 0 || p.brand.indexOf('海尔') >= 0; })[0].id;
-  i3.$('#puRows .pu-pid').value = i3pid; i3.fire(i3.$('#puRows .pu-pid'), 'change');
-  i3.$('#puRows .pu-qty').value = '5'; i3.fire(i3.$('#puRows .pu-qty'), 'input');
-  i3.$('#puRows .pu-price').value = '100'; i3.fire(i3.$('#puRows .pu-price'), 'input');
-  i3.$('#puSup').value = i3.DB.all('suppliers')[0].id; i3.fire(i3.$('#puSup'), 'change');
+  check('进货单有搜索框 #puKw', !!i3.$('#puKw'));
+  check('进货单有添加按钮 #puAddBtn', !!i3.$('#puAddBtn'));
+  check('进货单有产品列表 #puItems', !!i3.$('#puItems'));
+  check('进货单有单号显示 #puNo', !!i3.$('#puNo') && /^PO-/.test(i3.$('#puNo').textContent));
+  check('进货单有供应商下拉 #puSup', !!i3.$('#puSup'));
+  check('进货单有日期选择 #puDate', !!i3.$('#puDate'));
+  check('进货单有优惠输入 #puDiscount', !!i3.$('#puDiscount'));
+  check('进货单有件数显示 #puCount', !!i3.$('#puCount'));
+  check('进货单有合计显示 #puTotal', !!i3.$('#puTotal'));
+  check('进货单有实付显示 #puPayable', !!i3.$('#puPayable'));
+  // 搜索添加商品
+  i3.$('#puKw').value = '海尔';
+  i3.click(i3.$('#puAddBtn'));
+  check('添加后产品列表有1行', i3.$$('#puItems tr').length === 1, 'rows=' + i3.$$('#puItems tr').length);
+  check('添加后件数=1', i3.$('#puCount').textContent === '1', i3.$('#puCount').textContent);
+  check('合计大于0', /¥[1-9]/.test(i3.$('#puTotal').textContent), i3.$('#puTotal').textContent);
+  // 数量+按钮
+  i3.click(i3.$('#puItems .pu-plus'));
+  check('点击+后数量变为2', i3.$('#puItems .pu-qty').value === '2', i3.$('#puItems .pu-qty').value);
+  check('件数更新为2', i3.$('#puCount').textContent === '2');
+  // 数量-按钮
+  i3.click(i3.$('#puItems .pu-minus'));
+  check('点击-后数量变回1', i3.$('#puItems .pu-qty').value === '1');
+  // 重复添加同一商品（应数量累加）
+  i3.$('#puKw').value = '海尔';
+  i3.click(i3.$('#puAddBtn'));
+  check('重复添加同一商品后列表仍1行（数量累加）', i3.$$('#puItems tr').length === 1, 'rows=' + i3.$$('#puItems tr').length);
+  check('重复添加后数量=2', i3.$('#puItems .pu-qty').value === '2', i3.$('#puItems .pu-qty').value);
+  // 删除商品
+  i3.click(i3.$('#puItems .pu-del'));
+  check('删除后列表为空', i3.$$('#puItems tr').length === 0);
+  // 重新添加并保存
+  i3.$('#puKw').value = '海尔';
+  i3.click(i3.$('#puAddBtn'));
+  i3.$('#puSup').value = i3.DB.all('suppliers')[0].id;
   var beforeN = i3.DB.all('purchases').length;
   i3.App.savePurchase();
-  check('搜索并选择商品后可正常保存进货单', i3.DB.all('purchases').length === beforeN + 1);
-  check('进货单流程无 JS 错误', i3.errors.length === 0, i3.errors.join(' | '));
+  check('保存后进货单+1', i3.DB.all('purchases').length === beforeN + 1);
+  check('进货单新设计全程无 JS 错误', i3.errors.length === 0, i3.errors.join(' | '));
 
   section('I4 设置页 GitHub Pages 数据同步');
   var i4 = boot({ hash: '#settings' });
