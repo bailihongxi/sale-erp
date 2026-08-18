@@ -233,9 +233,13 @@
     document.getElementById('viewTitle').textContent = '商品管理';
     var list = DB.all('products');
     var PAGE_SIZE = 50;
-    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '', page: 1 });
+    var filter = uiState.prodFilter || (uiState.prodFilter = { kw: '', type: '全部', page: 1 });
+    var types = Array.from(new Set(list.map(function (p) { return p.type; }).filter(Boolean)));
 
     var hasProd = list.length > 0;
+    var typeOptions = ['全部'].concat(types).map(function (t) {
+      return '<option value="' + esc(t) + '"' + (filter.type === t ? ' selected' : '') + '>' + esc(t) + '</option>';
+    }).join('');
     var bodyBlock = hasProd
       ? '<div class="card prod-table"><table class="table"><thead><tr>' +
         '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
@@ -251,7 +255,9 @@
       '<button class="btn" onclick="App.openBatchImport()">📥 批量导入</button>' +
       '<button class="btn btn--primary" onclick="App.editProduct()">＋ 新增商品</button></div>' +
       (hasProd ? '<div class="prod-filter">' +
-        '<div class="search"><span>🔍</span><input id="prodKw" placeholder="搜索名称/品牌/型号/类型" value="' + esc(filter.kw) + '"/></div>' +
+        '<div class="search"><span>🔍</span><input id="prodKw" placeholder="搜索名称/品牌/型号" value="' + esc(filter.kw) + '"/></div>' +
+        '<select id="prodType" class="prod-filter__type">' + typeOptions + '</select>' +
+        '<button class="btn btn--sm prod-filter__btn" id="prodSearchBtn">搜索</button>' +
         '</div>' : '') +
       bodyBlock;
 
@@ -261,11 +267,23 @@
         filter.page = 1;
         renderProdRows();
       });
+      $('#prodType').addEventListener('change', function (e) {
+        filter.type = e.target.value;
+        filter.page = 1;
+        renderProdRows();
+      });
+      $('#prodSearchBtn').addEventListener('click', function () {
+        filter.kw = $('#prodKw').value;
+        filter.type = $('#prodType').value;
+        filter.page = 1;
+        renderProdRows();
+      });
     }
     renderProdRows();
     function getFiltered() {
       return list.filter(function (p) {
-        if (filter.kw && (p.name + p.brand + p.model + p.type).toLowerCase().indexOf(filter.kw.toLowerCase()) < 0) return false;
+        if (filter.kw && (p.name + p.brand + p.model).toLowerCase().indexOf(filter.kw.toLowerCase()) < 0) return false;
+        if (filter.type !== '全部' && p.type !== filter.type) return false;
         return true;
       });
     }

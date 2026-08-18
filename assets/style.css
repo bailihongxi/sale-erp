@@ -232,9 +232,12 @@ a{color:inherit;text-decoration:none}
 .chip{padding:6px 12px;border-radius:999px;border:1px solid var(--c-border);background:#fff;font-size:13px;font-weight:600;color:var(--c-muted)}
 .chip.active{background:var(--c-primary);border-color:var(--c-primary);color:#fff}
 
-/* 商品管理：分类下拉筛选（I6） */
+/* 商品管理：搜索 + 类型下拉 + 搜索按钮 */
 .prod-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .prod-filter .search{flex:1;min-width:140px}
+.prod-filter__type{padding:7px 10px;border-radius:8px;border:1px solid var(--c-border);background:#fff;font-size:13px;outline:none;cursor:pointer;max-width:160px}
+.prod-filter__type:focus{border-color:var(--c-primary)}
+.prod-filter__btn{padding:7px 16px;font-size:13px}
 
 /* 分页控件 */
 .pagination{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:8px 4px;flex-wrap:wrap;gap:8px}
@@ -337,10 +340,10 @@ a{color:inherit;text-decoration:none}
   .product-card__row span{flex-shrink:0}
   .product-card__row span:first-child{flex:1}
 
-  /* 商品管理：手机端筛选区域（I6） */
+  /* 商品管理：手机端筛选区域 */
   .prod-filter .search{flex:1 1 100%;min-width:0}
-  #prodCat{flex:1;min-width:0;max-width:none;font-size:14px;padding:9px 10px}
-  #prodCatFilter{flex:0 0 auto;padding:9px 16px;font-size:14px}
+  .prod-filter__type{flex:1;min-width:0;max-width:none;font-size:14px;padding:9px 10px}
+  .prod-filter__btn{flex:0 0 auto;padding:9px 16px;font-size:14px}
 }
 
 /* 更多菜单(手机) */

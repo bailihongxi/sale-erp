@@ -882,6 +882,37 @@ async function run() {
   check('小数据量无分页控件', !i10b.$('#prodPager') || i10b.$('#prodPager').innerHTML === '');
   check('分页渲染全程无 JS 错误', i10.errors.length + i10b.errors.length === 0,
     [i10.errors, i10b.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
+  section('I12 商品管理类型下拉筛选 + 搜索按钮');
+  var i12 = boot({ hash: '#products' });
+  check('搜索框后有类型下拉 #prodType', !!i12.$('#prodType'));
+  check('有搜索按钮 #prodSearchBtn', !!i12.$('#prodSearchBtn'));
+  var allTypes = Array.from(new Set(i12.DB.all('products').map(function (p) { return p.type; }).filter(Boolean)));
+  check('类型下拉选项数 = 类型数+1（全部）', i12.$('#prodType').options.length === allTypes.length + 1,
+    'options=' + i12.$('#prodType').options.length + ' types=' + allTypes.length);
+  check('类型下拉首项为「全部」', i12.$('#prodType').options[0].value === '全部');
+  // 选择某个类型后筛选生效
+  var targetType = allTypes[0];
+  var expectedByType = i12.DB.all('products').filter(function (p) { return p.type === targetType; }).length;
+  i12.$('#prodType').value = targetType; i12.fire(i12.$('#prodType'), 'change');
+  check('按类型筛选后表格行数 = 该类型商品数', i12.$$('#prodBody tr').length === expectedByType,
+    'rows=' + i12.$$('#prodBody tr').length + ' expected=' + expectedByType);
+  check('按类型筛选后卡片数 = 该类型商品数', i12.$$('#prodCards .product-card').length === expectedByType);
+  // 搜索按钮：关键词+类型组合筛选
+  i12.$('#prodType').value = '全部'; i12.fire(i12.$('#prodType'), 'change');
+  i12.$('#prodKw').value = '海尔';
+  i12.click(i12.$('#prodSearchBtn'));
+  var kwCount = i12.DB.all('products').filter(function (p) {
+    return (p.name + p.brand + p.model).toLowerCase().indexOf('海尔') >= 0;
+  }).length;
+  check('点击搜索按钮后按关键词筛选', i12.$$('#prodBody tr').length === kwCount,
+    'rows=' + i12.$$('#prodBody tr').length + ' expected=' + kwCount);
+  // 组合筛选：类型+关键词
+  i12.$('#prodType').value = targetType; i12.fire(i12.$('#prodType'), 'change');
+  i12.$('#prodKw').value = '';
+  i12.click(i12.$('#prodSearchBtn'));
+  check('搜索按钮可重置关键词并按类型筛选', i12.$$('#prodBody tr').length === expectedByType);
+  check('类型筛选全程无 JS 错误', i12.errors.length === 0, i12.errors.join(' | '));
 }
 
 /** 与 app.js money() 保持一致的金额格式，用于断言界面文本 */
