@@ -75,7 +75,9 @@
     setTimeout(function () { t.classList.remove('show'); setTimeout(function () { wrap.removeChild(t); }, 300); }, 2200);
   }
 
-  function openModal(title, bodyHtml, footHtml) {
+  function openModal(title, bodyHtml, footHtml, modalClass) {
+    var modal = document.getElementById('modal');
+    modal.className = 'modal' + (modalClass ? ' ' + modalClass : '');
     document.getElementById('modalTitle').innerHTML = title;
     document.getElementById('modalBody').innerHTML = bodyHtml;
     document.getElementById('modalFoot').innerHTML = footHtml || '';
@@ -1014,7 +1016,7 @@
         '<button class="btn btn--primary pu-settle" onclick="App.savePurchase()">结算入库</button>' +
       '</div>' +
       '</div>';
-    openModal('', body, '');
+    openModal('', body, '', 'purchase-modal');
     // 弹窗标题清空，使用自定义标题
     document.getElementById('modalTitle').style.display = 'none';
     // 事件绑定

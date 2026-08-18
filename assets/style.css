@@ -265,6 +265,14 @@ a{color:inherit;text-decoration:none}
 .pu-form__foot b{font-size:16px}
 .pu-discount{display:flex;align-items:center;gap:4px}
 .pu-settle{margin-left:auto;padding:10px 32px;font-size:15px}
+/* 进货单弹窗：电脑端宽度为页面一半，高度自适应 */
+.modal.purchase-modal{max-width:none;width:50vw;min-width:640px;max-height:92vh;display:flex;flex-direction:column}
+.modal.purchase-modal .modal__body{padding:16px 18px;overflow:auto;flex:1}
+.modal.purchase-modal .modal__foot{display:none}
+/* 手机端进货单弹窗保持全宽 */
+@media(max-width:768px){
+  .modal.purchase-modal{width:100%;min-width:0;max-height:94vh;margin:0 8px}
+}
 /* 手机端进货单适配 */
 @media(max-width:768px){
   .pu-form{min-width:0}

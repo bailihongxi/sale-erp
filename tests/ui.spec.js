@@ -721,6 +721,11 @@ async function run() {
   section('I3 新建进货单重新设计（搜索+添加+产品列表+结算）');
   var i3 = boot({ hash: '#purchase' });
   i3.App.openPurchaseForm();
+  check('进货单弹窗有 purchase-modal 类', i3.$('#modal').classList.contains('purchase-modal'));
+  var i3css = helpers.read('assets/style.css');
+  check('CSS 定义进货单弹窗电脑端宽度50vw', /\.modal\.purchase-modal\{[^}]*width:\s*50vw/.test(i3css));
+  check('CSS 定义进货单弹窗高度自适应(max-height)', /\.modal\.purchase-modal\{[^}]*max-height:\s*92vh/.test(i3css));
+  check('CSS 定义手机端进货单弹窗全宽', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.modal\.purchase-modal\{[^}]*width:\s*100%/.test(i3css));
   check('进货单有搜索框 #puKw', !!i3.$('#puKw'));
   check('进货单有添加按钮 #puAddBtn', !!i3.$('#puAddBtn'));
   check('进货单有产品列表 #puItems', !!i3.$('#puItems'));
