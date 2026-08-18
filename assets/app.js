@@ -77,10 +77,15 @@
 
   function openModal(title, bodyHtml, footHtml, modalClass) {
     var modal = document.getElementById('modal');
-    modal.className = 'modal' + (modalClass ? ' ' + modalClass : '');
     document.getElementById('modalTitle').innerHTML = title;
     document.getElementById('modalBody').innerHTML = bodyHtml;
     document.getElementById('modalFoot').innerHTML = footHtml || '';
+    // 自动检测：包含可编辑表单的弹窗添加保护类，防止误点遮罩丢失编辑内容
+    var hasEditable = document.getElementById('modalBody').querySelectorAll(
+      'input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled])'
+    ).length > 0;
+    var cls = 'modal' + (modalClass ? ' ' + modalClass : '') + (hasEditable ? ' modal--protect' : '');
+    modal.className = cls;
     document.getElementById('modalMask').classList.add('show');
   }
   function closeModal() { document.getElementById('modalMask').classList.remove('show'); }
@@ -1650,12 +1655,19 @@
   });
   // 弹窗：点遮罩空白处 / 按 ESC 关闭（MNR-05）
   document.getElementById('modalMask').addEventListener('click', function (e) {
-    if (e.target.id === 'modalMask') closeModal();
+    if (e.target.id !== 'modalMask') return;
+    // 含可编辑表单的弹窗（modal--protect）点击遮罩不关闭，防止丢失编辑内容
+    if (document.getElementById('modal').classList.contains('modal--protect')) return;
+    closeModal();
   });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' && e.keyCode !== 27) return;
     if (document.getElementById('sheetMask').classList.contains('show')) { closeSheet(); return; }
-    if (document.getElementById('modalMask').classList.contains('show')) closeModal();
+    if (document.getElementById('modalMask').classList.contains('show')) {
+      // 含可编辑表单的弹窗ESC不关闭
+      if (document.getElementById('modal').classList.contains('modal--protect')) return;
+      closeModal();
+    }
   });
 
   /* ---------------- 存储位置徽标 + 首次引导（GAP-05） ---------------- */

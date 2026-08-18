@@ -167,18 +167,34 @@ async function run() {
     return e1.$('#sheetMask').classList.contains('show');
   })());
 
-  section('E1b 弹窗遮罩点击 / ESC 关闭（MNR-05）');
+  section('E1b 弹窗遮罩点击 / ESC 关闭（MNR-05）+ 表单保护');
   var e1b = boot({ hash: '#products' });
+  // 含可编辑表单的弹窗（新增商品）：点击遮罩和ESC不关闭，防止丢失编辑内容
   e1b.App.editProduct();
-  check('弹窗已打开', e1b.$('#modalMask').classList.contains('show'));
+  check('表单弹窗已打开', e1b.$('#modalMask').classList.contains('show'));
+  check('表单弹窗有 modal--protect 保护类', e1b.$('#modal').classList.contains('modal--protect'));
   e1b.click(e1b.$('#modalMask'));
-  check('点击遮罩空白处关闭弹窗', !e1b.$('#modalMask').classList.contains('show'));
-  e1b.App.editProduct();
+  check('含表单弹窗点击遮罩不关闭', e1b.$('#modalMask').classList.contains('show'));
   e1b.document.dispatchEvent(new e1b.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  check('按 ESC 关闭弹窗', !e1b.$('#modalMask').classList.contains('show'));
-  e1b.App.editProduct();
+  check('含表单弹窗按ESC不关闭', e1b.$('#modalMask').classList.contains('show'));
   e1b.click(e1b.$('#modal'));
   check('点击弹窗内部不会关闭', e1b.$('#modalMask').classList.contains('show'));
+  e1b.App.closeModal();
+  // 纯展示弹窗（进货单详情）：点击遮罩和ESC可以关闭
+  var e1b2 = boot({ hash: '#purchase' });
+  e1b2.App.openPurchase(e1b2.DB.all('purchases')[0].id);
+  check('纯展示弹窗已打开', e1b2.$('#modalMask').classList.contains('show'));
+  check('纯展示弹窗无 modal--protect 类', !e1b2.$('#modal').classList.contains('modal--protect'));
+  e1b2.click(e1b2.$('#modalMask'));
+  check('纯展示弹窗点击遮罩可关闭', !e1b2.$('#modalMask').classList.contains('show'));
+  // 进货单弹窗（含复杂表单）也受保护
+  var e1b3 = boot({ hash: '#purchase' });
+  e1b3.App.openPurchaseForm();
+  check('进货单弹窗有 modal--protect 保护类', e1b3.$('#modal').classList.contains('modal--protect'));
+  e1b3.click(e1b3.$('#modalMask'));
+  check('进货单弹窗点击遮罩不关闭', e1b3.$('#modalMask').classList.contains('show'));
+  check('弹窗保护全程无 JS 错误', e1b.errors.length + e1b2.errors.length + e1b3.errors.length === 0,
+    [e1b.errors, e1b2.errors, e1b3.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
   section('E2 超卖在界面被拦截并提示（BUG-02 UI 侧）');
   var e2 = boot({ hash: '#pos' });
