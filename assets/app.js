@@ -290,24 +290,15 @@
       var cards = $('#prodCards');
       if (cards) {
         cards.innerHTML = filtered.map(function (p) {
-          var low = p.stock <= (p.lowStock || DB.settings().lowStock);
           return '<div class="product-card" data-id="' + p.id + '">' +
-            '<div class="product-card__title">' + esc(p.name) + '</div>' +
             '<div class="product-card__row">' +
-              '<span class="muted">' + esc(p.brand || '') + '</span>' +
+              '<span class="product-card__name">' + esc(p.name) + '</span>' +
               '<span class="muted">' + esc(p.type || '') + '</span>' +
             '</div>' +
             '<div class="product-card__row">' +
-              '<span>进货价：' + money(p.priceWholesale) + '</span>' +
-              '<span>售价：' + money(p.priceRetail) + '</span>' +
-            '</div>' +
-            '<div class="product-card__row">' +
-              '<span>库存：' + (low ? '<b class="danger">' + p.stock + '</b>' : p.stock) + ' ' + esc(p.unit) + '</span>' +
-              (low ? '<span class="tag tag--danger">低库存</span>' : '') +
-            '</div>' +
-            '<div class="product-card__actions">' +
-              '<button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button>' +
-              '<button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button>' +
+              '<span>进' + money(p.priceWholesale) + '</span>' +
+              '<span>售' + money(p.priceRetail) + '</span>' +
+              '<span>库存' + p.stock + esc(p.unit) + '</span>' +
             '</div>' +
           '</div>';
         }).join('') || '<div class="empty">没有匹配的商品</div>';

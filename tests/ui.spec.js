@@ -754,7 +754,7 @@ async function run() {
   check('GitHub 同步全程无 JS 错误', i4.errors.length + i4b.errors.length === 0,
     [i4.errors, i4b.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
-  section('I5 手机端商品页卡片布局');
+  section('I5 手机端商品页卡片布局（两行显示）');
   var i5 = boot({ hash: '#products' });
   check('商品页保留桌面表格', !!i5.$('#prodBody') && i5.$$('#prodBody tr').length > 0);
   check('商品页新增手机卡片容器', !!i5.$('#prodCards'));
@@ -762,15 +762,18 @@ async function run() {
   check('卡片数量等于商品数量', i5.$$('#prodCards .product-card').length === prodCount,
     i5.$$('#prodCards .product-card').length + ' vs ' + prodCount);
   var firstCard = i5.$('#prodCards .product-card');
-  check('卡片含商品名称', !!firstCard && firstCard.textContent.indexOf(i5.DB.all('products')[0].name) >= 0);
-  check('卡片含进货价', !!firstCard && /进货价/.test(firstCard.textContent));
-  check('卡片含售价', !!firstCard && /售价/.test(firstCard.textContent));
-  check('卡片含库存', !!firstCard && /库存/.test(firstCard.textContent));
-  var lowP = i5.DB.all('products').filter(function (p) { return p.stock <= p.lowStock; })[0];
-  if (lowP) {
-    var lowCard = Array.prototype.filter.call(i5.$$('#prodCards .product-card'), function (c) { return c.textContent.indexOf(lowP.name) >= 0; })[0];
-    check('低库存商品卡片显示「低库存」标签', !!lowCard && /低库存/.test(lowCard.textContent));
-  }
+  var firstProd = i5.DB.all('products')[0];
+  check('卡片第一行含商品名称', !!firstCard && firstCard.querySelector('.product-card__name') &&
+    firstCard.querySelector('.product-card__name').textContent === firstProd.name);
+  check('卡片第一行含类型', !!firstCard && firstCard.textContent.indexOf(firstProd.type) >= 0);
+  check('卡片第二行含进货价（进¥）', !!firstCard && /进¥/.test(firstCard.textContent));
+  check('卡片第二行含售价（售¥）', !!firstCard && /售¥/.test(firstCard.textContent));
+  check('卡片第二行含库存', !!firstCard && /库存/.test(firstCard.textContent));
+  check('卡片只有2行（.product-card__row）', !!firstCard && firstCard.querySelectorAll('.product-card__row').length === 2,
+    firstCard.querySelectorAll('.product-card__row').length);
+  check('卡片不含品牌字段', !!firstCard && !/品牌/.test(firstCard.textContent));
+  check('卡片不含编辑按钮', !firstCard.querySelector('.btn'));
+  check('卡片不含低库存标签', !firstCard.querySelector('.tag--danger'));
   var i5css = helpers.read('assets/style.css');
   check('CSS 在手机端隐藏桌面表格', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.prod-table\s*\{\s*display:\s*none/.test(i5css));
   check('CSS 在手机端显示卡片容器', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.prod-cards\s*\{\s*display:\s*block/.test(i5css));
