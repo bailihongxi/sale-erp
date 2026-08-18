@@ -382,6 +382,30 @@ function run() {
   var pN = DB.all('products')[0];
   DB.adjustStock(pN.id, -999999, '压测');
   check('库存调整不会变负数', DB.get('products', pN.id).stock >= 0, DB.get('products', pN.id).stock);
+
+  section('B10 批量插入 insertBatch（性能优化）');
+  DB = freshDB();
+  check('DB.insertBatch 函数存在', typeof DB.insertBatch === 'function');
+  var beforeCount = DB.all('products').length;
+  var batch = [];
+  for (var bi = 0; bi < 100; bi++) {
+    batch.push({ name: '批量商品' + bi, brand: 'B', model: 'M' + bi, type: 'T', unit: '台', priceWholesale: 10, priceRetail: 15, stock: 5, lowStock: 2 });
+  }
+  var inserted = DB.insertBatch('products', batch);
+  check('批量插入返回100条', inserted.length === 100, inserted.length);
+  check('插入后商品数增加100', DB.all('products').length === beforeCount + 100, DB.all('products').length);
+  check('每条都有id', inserted.every(function (x) { return !!x.id; }));
+  check('可通过get查到批量插入的商品', !!DB.get('products', inserted[50].id));
+  // 大批量：500条不报错且性能可接受
+  var bigBatch = [];
+  for (var bj = 0; bj < 500; bj++) {
+    bigBatch.push({ name: '大批量' + bj, brand: 'B', model: 'X' + bj, type: 'T', unit: '台', priceWholesale: 1, priceRetail: 2, stock: 1, lowStock: 1 });
+  }
+  var t0 = Date.now();
+  DB.insertBatch('products', bigBatch);
+  var elapsed = Date.now() - t0;
+  check('500条批量插入不报错', DB.all('products').length === beforeCount + 100 + 500);
+  check('500条批量插入耗时<500ms', elapsed < 500, '耗时=' + elapsed + 'ms');
 }
 
 module.exports = { run: run };

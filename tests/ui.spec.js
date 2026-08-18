@@ -683,6 +683,28 @@ async function run() {
   i1t.window.URL.createObjectURL = origCreate;
   check('CSV文件导入功能全程无 JS 错误', i1t.errors.length === 0, i1t.errors.join(' | '));
 
+  section('I1c 大批量导入性能优化（insertBatch）');
+  var i1c = boot({ hash: '#products' });
+  // 构造300行CSV数据
+  var bigCsv = ['商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存'];
+  for (var k = 0; k < 300; k++) {
+    bigCsv.push('压测商品' + k + ',品牌B,型号M' + k + ',类型T,台,' + (10 + k) + ',' + (20 + k) + ',5,' + k);
+  }
+  var beforeN = i1c.DB.all('products').length;
+  i1c.App.openBatchImport();
+  i1c.$('#batchArea').value = bigCsv.join('\n');
+  var t1 = Date.now();
+  i1c.App.doBatchImport();
+  var elapsed1 = Date.now() - t1;
+  check('300行CSV导入成功，商品数+300', i1c.DB.all('products').length === beforeN + 300,
+    '实际=' + (i1c.DB.all('products').length - beforeN));
+  check('300行导入耗时<1000ms', elapsed1 < 1000, '耗时=' + elapsed1 + 'ms');
+  check('大批量导入无 JS 错误', i1c.errors.length === 0, i1c.errors.join(' | '));
+  // 验证导入数据正确
+  var sample = i1c.DB.all('products').filter(function (p) { return p.name === '压测商品150'; })[0];
+  check('批量导入数据字段正确（名称/批发价/库存）', !!sample && sample.priceWholesale === 160 && sample.stock === 150,
+    sample && (sample.priceWholesale + '/' + sample.stock));
+
   section('I2 销售开单结算与搜索位置互换');
   var i2 = boot({ hash: '#pos' });
   var posEl = i2.$('.pos');

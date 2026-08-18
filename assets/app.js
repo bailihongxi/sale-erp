@@ -488,12 +488,13 @@
       }
     }
     var created = 0, skipped = 0;
+    var toInsert = [];
     for (var ri = 0; ri < rows.length; ri++) {
       var row = rows[ri];
       if (!row.name || !String(row.name).trim()) {
         errors.push('第 ' + (ri + 1) + ' 行缺少商品名称'); skipped++; continue;
       }
-      DB.insert('products', {
+      toInsert.push({
         name: String(row.name).trim(),
         brand: String(row.brand || '').trim(),
         model: String(row.model || '').trim(),
@@ -505,6 +506,10 @@
         stock: parseInt(row.stock, 10) || 0
       });
       created++;
+    }
+    // 批量写入：只持久化一次，避免大数据量时反复写 localStorage 导致卡顿
+    if (toInsert.length > 0) {
+      DB.insertBatch('products', toInsert);
     }
     closeModal();
     var msg = '已导入 ' + created + ' 个商品' + (skipped ? '，跳过 ' + skipped + ' 行' : '');
