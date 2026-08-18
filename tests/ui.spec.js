@@ -736,7 +736,36 @@ async function run() {
   check('进货单有件数显示 #puCount', !!i3.$('#puCount'));
   check('进货单有合计显示 #puTotal', !!i3.$('#puTotal'));
   check('进货单有实付显示 #puPayable', !!i3.$('#puPayable'));
-  // 搜索添加商品
+  // 搜索自动补全下拉
+  check('进货单有搜索建议容器 #puSuggest', !!i3.$('#puSuggest'));
+  i3.$('#puKw').value = '海尔';
+  i3.fire(i3.$('#puKw'), 'input');
+  check('输入关键词后显示下拉建议', i3.$('#puSuggest').classList.contains('show'),
+    i3.$('#puSuggest').className);
+  check('下拉建议包含匹配商品', i3.$$('#puSuggest .pu-suggest__item').length > 0,
+    'items=' + i3.$$('#puSuggest .pu-suggest__item').length);
+  check('下拉建议项含商品名称', /海尔/.test(i3.$('#puSuggest').textContent),
+    i3.$('#puSuggest').textContent.slice(0, 80));
+  // 点击下拉建议项添加商品
+  var firstItem = i3.$('#puSuggest .pu-suggest__item');
+  var itemName = firstItem.getAttribute('data-name');
+  i3.fire(firstItem, 'mousedown');
+  check('点击建议项后产品列表有1行', i3.$$('#puItems tr').length === 1, 'rows=' + i3.$$('#puItems tr').length);
+  check('点击建议项后下拉隐藏', !i3.$('#puSuggest').classList.contains('show'));
+  // 重复添加同一商品自动累加数量
+  i3.$('#puKw').value = itemName;
+  i3.fire(i3.$('#puKw'), 'input');
+  i3.fire(i3.$('#puSuggest .pu-suggest__item'), 'mousedown');
+  check('重复添加后列表仍1行（数量累加）', i3.$$('#puItems tr').length === 1, 'rows=' + i3.$$('#puItems tr').length);
+  check('重复添加后数量=2', i3.$('#puItems .pu-qty').value === '2', i3.$('#puItems .pu-qty').value);
+  // 清空搜索后下拉隐藏
+  i3.$('#puKw').value = '';
+  i3.fire(i3.$('#puKw'), 'input');
+  check('清空关键词后下拉隐藏', !i3.$('#puSuggest').classList.contains('show'));
+  // 清空商品列表，后续测试重新开始
+  while (i3.$('#puItems .pu-del')) { i3.click(i3.$('#puItems .pu-del')); }
+  check('清空后商品列表为空', i3.$$('#puItems tr').length === 0);
+  // 搜索添加商品（旧方式保留）
   i3.$('#puKw').value = '海尔';
   i3.click(i3.$('#puAddBtn'));
   check('添加后产品列表有1行', i3.$$('#puItems tr').length === 1, 'rows=' + i3.$$('#puItems tr').length);

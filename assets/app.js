@@ -1000,9 +1000,10 @@
           '<div><label>日期</label><input id="puDate" type="date" value="' + today() + '"/></div>' +
         '</div>' +
       '</div>' +
-      '<div class="pu-form__search">' +
-        '<div class="search"><span>🔍</span><input id="puKw" placeholder="输入产品名称/型号，回车或点击加入"/></div>' +
+      '<div class="pu-form__search" style="position:relative">' +
+        '<div class="search"><span>🔍</span><input id="puKw" placeholder="输入产品名称/型号，从下拉选择或回车添加" autocomplete="off"/></div>' +
         '<button class="btn btn--primary pu-add" id="puAddBtn">添加</button>' +
+        '<div id="puSuggest" class="pu-suggest"></div>' +
       '</div>' +
       '<div class="pu-form__items"><table class="table"><thead><tr>' +
         '<th>产品</th><th>规格</th><th>单价(¥)</th><th>数量</th><th>小计(¥)</th><th class="right">操作</th>' +
@@ -1021,14 +1022,57 @@
     document.getElementById('modalTitle').style.display = 'none';
     // 事件绑定
     var kw = $('#puKw');
-    kw.addEventListener('keydown', function (e) { if (e.key === 'Enter') addPuItemByKw(); });
-    $('#puAddBtn').addEventListener('click', addPuItemByKw);
+    var suggest = $('#puSuggest');
+    kw.addEventListener('input', function () { updatePuSuggest(); });
+    kw.addEventListener('focus', function () { updatePuSuggest(); });
+    kw.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); hidePuSuggest(); addPuItemByKw(); }
+      if (e.key === 'Escape') { hidePuSuggest(); }
+    });
+    $('#puAddBtn').addEventListener('click', function () { hidePuSuggest(); addPuItemByKw(); });
+    // 点击外部隐藏下拉
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.pu-form__search')) hidePuSuggest();
+    });
     $('#puDiscount').addEventListener('input', function (e) {
       uiState.pu.discount = parseFloat(e.target.value) || 0;
       updatePuFoot();
     });
     renderPuItems();
   };
+  /** 更新搜索建议下拉列表 */
+  function updatePuSuggest() {
+    var kw = ($('#puKw') && $('#puKw').value || '').trim().toLowerCase();
+    var suggest = $('#puSuggest');
+    if (!suggest) return;
+    if (!kw) { suggest.classList.remove('show'); suggest.innerHTML = ''; return; }
+    var matches = DB.all('products').filter(function (p) {
+      return (p.name + ' ' + p.brand + ' ' + p.model + ' ' + p.type).toLowerCase().indexOf(kw) >= 0;
+    }).slice(0, 8);
+    if (matches.length === 0) { suggest.classList.remove('show'); suggest.innerHTML = ''; return; }
+    suggest.innerHTML = matches.map(function (p) {
+      return '<div class="pu-suggest__item" data-name="' + esc(p.name) + '">' +
+        '<b>' + esc(p.name) + '</b>' +
+        (p.model ? ' <span class="muted">' + esc(p.model) + '</span>' : '') +
+        (p.brand ? ' <span class="muted">' + esc(p.brand) + '</span>' : '') +
+        '</div>';
+    }).join('');
+    suggest.classList.add('show');
+    // 点击建议项填充搜索框
+    Array.prototype.forEach.call(suggest.querySelectorAll('.pu-suggest__item'), function (item) {
+      item.addEventListener('mousedown', function (e) {
+        e.preventDefault(); // 防止input失焦
+        var name = this.getAttribute('data-name');
+        $('#puKw').value = name;
+        hidePuSuggest();
+        addPuItemByKw();
+      });
+    });
+  }
+  function hidePuSuggest() {
+    var s = $('#puSuggest');
+    if (s) { s.classList.remove('show'); s.innerHTML = ''; }
+  }
   /** 按搜索关键词添加商品：取第一个匹配的商品 */
   function addPuItemByKw() {
     var kw = ($('#puKw') && $('#puKw').value || '').trim().toLowerCase();
