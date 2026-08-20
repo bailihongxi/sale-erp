@@ -256,7 +256,7 @@
     var bodyBlock = hasProd
       ? '<div class="card prod-table"><table class="table"><thead><tr>' +
         '<th class="col-check"><input type="checkbox" id="prodCheckAll"/></th>' +
-        '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th class="right">操作</th>' +
+        '<th>名称</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th><th>批发价</th><th>零售价</th><th>库存</th><th>备注</th><th class="right">操作</th>' +
         '</tr></thead><tbody id="prodBody"></tbody></table></div>' +
         '<div class="prod-cards" id="prodCards"></div>' +
         '<div class="pagination" id="prodPager"></div>'
@@ -359,8 +359,8 @@
           var isDup = dupNames[(p.name || '').trim()];
           var checked = filter.selected[p.id] ? ' checked' : '';
           var nameHtml = isDup ? '<b class="dup-name" title="存在重名商品">' + esc(p.name) + '</b>' : '<b>' + esc(p.name) + '</b>';
-          return '<tr><td class="col-check"><input type="checkbox" class="prod-check" data-id="' + p.id + '"' + checked + '/></td><td>' + nameHtml + '</td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
-        }).join('') || '<tr><td colspan="10" class="empty">没有匹配的商品</td></tr>';
+          return '<tr><td class="col-check"><input type="checkbox" class="prod-check" data-id="' + p.id + '"' + checked + '/></td><td>' + nameHtml + '</td><td>' + esc(p.brand) + '</td><td>' + esc(p.model) + '</td><td>' + esc(p.type) + '</td><td>' + esc(p.unit) + '</td><td class="mono">' + money(p.priceWholesale) + '</td><td class="mono">' + money(p.priceRetail) + '</td><td>' + (low ? '<span class="tag tag--danger">' + p.stock + '</span>' : p.stock) + '</td><td class="muted remark-cell">' + esc(p.remark || '') + '</td><td class="right"><button class="btn btn--sm" onclick="App.editProduct(\'' + p.id + '\')">编辑</button> <button class="btn btn--sm btn--danger" onclick="App.delProduct(\'' + p.id + '\')">删除</button></td></tr>';
+        }).join('') || '<tr><td colspan="11" class="empty">没有匹配的商品</td></tr>';
       }
       var cards = $('#prodCards');
       if (cards) {
@@ -381,6 +381,7 @@
               '<span>售' + money(p.priceRetail) + '</span>' +
               '<span>库存' + p.stock + esc(p.unit) + '</span>' +
             '</div>' +
+            (p.remark ? '<div class="product-card__row"><span class="muted product-card__remark">备注：' + esc(p.remark) + '</span></div>' : '') +
           '</div>';
         }).join('') || '<div class="empty">没有匹配的商品</div>';
       }
@@ -422,7 +423,8 @@
       '<div class="field"><label>零售价</label><input id="f_pr" type="number" value="' + esc(f('priceRetail', 0)) + '"/></div>' +
       '<div class="field"><label>低库存阈值</label><input id="f_low" type="number" value="' + esc(f('lowStock', 10)) + '"/></div>' +
       '</div>' +
-      '<div class="field"><label>当前库存</label><input id="f_stock" type="number" value="' + esc(f('stock', 0)) + '"/></div>';
+      '<div class="field"><label>当前库存</label><input id="f_stock" type="number" value="' + esc(f('stock', 0)) + '"/></div>' +
+      '<div class="field"><label>备注</label><textarea id="f_remark" rows="2" placeholder="选填，记录商品特性、摆放位置等">' + esc(f('remark')) + '</textarea></div>';
     openModal(p ? '编辑商品' : '新增商品', body,
       '<button class="btn" onclick="App.closeModal()">取消</button><button class="btn btn--primary" onclick="App.saveProduct(\'' + (id || '') + '\')">保存</button>');
   };
@@ -431,7 +433,8 @@
       name: $('#f_name').value.trim(), brand: $('#f_brand').value.trim(), model: $('#f_model').value.trim(),
       type: $('#f_type').value.trim(), unit: $('#f_unit').value.trim() || '台',
       priceWholesale: parseFloat($('#f_pw').value) || 0, priceRetail: parseFloat($('#f_pr').value) || 0,
-      lowStock: parseInt($('#f_low').value) || 0, stock: parseInt($('#f_stock').value) || 0
+      lowStock: parseInt($('#f_low').value) || 0, stock: parseInt($('#f_stock').value) || 0,
+      remark: $('#f_remark').value.trim()
     };
     if (!data.name) { toast('请填写商品名称', 'err'); return; }
     if (id) DB.update('products', id, data); else DB.insert('products', data);
@@ -492,7 +495,7 @@
   };
   /** 批量导入商品（CSV / TSV / JSON） */
   window.App.openBatchImport = function () {
-    var sample = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存\n美的空调 KFR-35GW,美的,KFR-35GW,空调,台,1899,2299,10,20\n九阳豆浆机 JYDZ,九阳,JYDZ,小家电,台,199,299,5,30';
+    var sample = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存,备注\n美的空调 KFR-35GW,美的,KFR-35GW,空调,台,1899,2299,10,20,\n九阳豆浆机 JYDZ,九阳,JYDZ,小家电,台,199,299,5,30,';
     var body =
       '<div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">' +
       '<button class="btn btn--sm" onclick="App.chooseCsvFile()">📂 选择CSV文件</button>' +
@@ -501,7 +504,7 @@
       '<span class="muted" style="font-size:12px;align-self:center">先下载模板编辑，再选择CSV文件将内容载入下方文本框</span>' +
       '</div>' +
       '<div class="field"><label>粘贴 CSV / TSV / JSON</label><textarea id="batchArea" rows="10" placeholder="' + esc(sample) + '"></textarea></div>' +
-      '<div class="muted" style="font-size:12px;margin-top:6px">支持 CSV（逗号分隔，可含表头）、TSV（制表符分隔）或 JSON 数组。表头可用「商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存」或对应英文 key；无表头时按此顺序解析。</div>';
+      '<div class="muted" style="font-size:12px;margin-top:6px">支持 CSV（逗号分隔，可含表头）、TSV（制表符分隔）或 JSON 数组。表头可用「商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存,备注」或对应英文 key；无表头时按此顺序解析。</div>';
     openModal('批量导入商品', body,
       '<button class="btn" onclick="App.closeModal()">取消</button>' +
       '<button class="btn btn--primary" onclick="App.doBatchImport()">开始导入</button>');
@@ -509,10 +512,10 @@
 
   /** 生成商品批量导入 CSV 模板文本（表头 + 2 行示例，不含 BOM） */
   function csvTemplateText() {
-    var header = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存';
+    var header = '商品名称,品牌,型号,类型,单位,批发价,零售价,低库存阈值,库存,备注';
     var rows = [
-      '示例-美的空调,美的,KFR-35GW,空调,台,1899,2299,10,20',
-      '示例-九阳豆浆机,九阳,JYDZ,小家电,台,199,299,5,30'
+      '示例-美的空调,美的,KFR-35GW,空调,台,1899,2299,10,20,热销机型',
+      '示例-九阳豆浆机,九阳,JYDZ,小家电,台,199,299,5,30,赠品区陈列'
     ];
     return header + '\n' + rows.join('\n') + '\n';
   }
@@ -578,7 +581,7 @@
       var lines = raw.split(/\r?\n/).filter(function (l) { return l.trim(); });
       if (lines.length === 0) { errors.push('没有有效行'); }
       else {
-        var keys = ['name','brand','model','type','unit','priceWholesale','priceRetail','lowStock','stock'];
+        var keys = ['name','brand','model','type','unit','priceWholesale','priceRetail','lowStock','stock','remark'];
         var aliases = {
           name: ['商品名称','name','名称'],
           brand: ['品牌','brand'],
@@ -588,7 +591,8 @@
           priceWholesale: ['批发价','priceWholesale','进货价','成本价'],
           priceRetail: ['零售价','priceRetail','售价','price','sellPrice'],
           lowStock: ['低库存阈值','lowStock','预警库存'],
-          stock: ['库存','stock']
+          stock: ['库存','stock'],
+          remark: ['备注','remark','说明']
         };
         var first = lines[0];
         var parts = first.split(delim).map(function (h) { return h.trim(); });
@@ -640,7 +644,8 @@
         priceWholesale: parseFloat(row.priceWholesale) || 0,
         priceRetail: parseFloat(row.priceRetail) || 0,
         lowStock: parseInt(row.lowStock, 10) || 10,
-        stock: parseInt(row.stock, 10) || 0
+        stock: parseInt(row.stock, 10) || 0,
+        remark: String(row.remark || '').trim()
       });
       created++;
     }

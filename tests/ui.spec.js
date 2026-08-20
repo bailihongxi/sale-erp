@@ -562,6 +562,54 @@ async function run() {
   check('空白商品页引导新增', /新增第一个商品|新增商品/.test(g5.$('#view').textContent), g5.$('#view').textContent.slice(0, 120));
 
   /* ========================================================
+     I16 商品「备注」字段（表单/表格/卡片/批量导入 全覆盖）
+     ======================================================== */
+  section('I16 商品备注字段');
+  // 1) 编辑表单含「备注」输入框
+  var i16 = boot({ hash: '#products' });
+  i16.App.editProduct();
+  check('编辑弹窗含「备注」输入框 #f_remark', !!i16.$('#f_remark'),
+    i16.$('#modalBody').innerHTML.slice(-260));
+  // 2) 保存后备注落库
+  i16.$('#f_name').value = '备注测试商品';
+  i16.$('#f_remark').value = '这是一段备注';
+  i16.App.saveProduct('');
+  var i16prod = i16.DB.all('products').filter(function (p) { return p.name === '备注测试商品'; })[0];
+  check('保存后备注写入数据', !!i16prod && i16prod.remark === '这是一段备注', i16prod && i16prod.remark);
+  // 3) 桌面表格含「备注」表头 + 行内显示
+  var i16ths = i16.$('#prodBody').parentNode.querySelectorAll('th');
+  var i16hasHeader = false;
+  for (var i16h = 0; i16h < i16ths.length; i16h++) {
+    if (i16ths[i16h].textContent.trim() === '备注') i16hasHeader = true;
+  }
+  check('桌面表格含「备注」表头', i16hasHeader);
+  check('商品行显示备注内容', i16.text('#prodBody').indexOf('这是一段备注') >= 0,
+    i16.text('#prodBody').slice(0, 200));
+  // 4) 手机卡片显示备注
+  check('手机卡片显示备注内容', i16.text('#prodCards').indexOf('这是一段备注') >= 0,
+    i16.text('#prodCards').slice(0, 200));
+  // 5) 批量导入支持「备注」列
+  var i16b = boot({ hash: '#products' });
+  i16b.App.openBatchImport();
+  i16b.$('#batchArea').value = '商品名称,品牌,备注\n导入带备注,品牌Y,备注内容XYZ';
+  i16b.App.doBatchImport();
+  var i16imp = i16b.DB.all('products').filter(function (p) { return p.name === '导入带备注'; })[0];
+  check('CSV 含「备注」列时映射到 remark', !!i16imp && i16imp.remark === '备注内容XYZ', i16imp && i16imp.remark);
+  // 6) 下载模板含「备注」表头
+  var i16tpl = '';
+  var i16blob = i16b.window.Blob;
+  i16b.window.Blob = function (parts) { i16tpl = (parts[0] || '').toString(); };
+  var i16url = i16b.window.URL.createObjectURL;
+  i16b.window.URL.createObjectURL = function () { return 'blob:t'; };
+  var i16ce = i16b.document.createElement.bind(i16b.document);
+  i16b.document.createElement = function (tag) { var el = i16ce(tag); if (tag === 'a') el.click = function () {}; return el; };
+  i16b.App.downloadCsvTemplate();
+  i16b.document.createElement = i16ce;
+  i16b.window.URL.createObjectURL = i16url;
+  i16b.window.Blob = i16blob;
+  check('下载的 CSV 模板含「备注」表头', /备注/.test(i16tpl), i16tpl.slice(0, 140));
+
+  /* ========================================================
      M 手机端就绪度（S4-02）
      ======================================================== */
   section('M1 视口与移动端标记');
@@ -904,7 +952,7 @@ async function run() {
   check('商品页无 .cats 容器', !i6.$('.cats'));
   var i6ths = i6.$$('#view table th').map(function (e) { return e.textContent; });
   check('表格表头无「分类」列', i6ths.indexOf('分类') < 0, i6ths.join(','));
-  check('表格列数 = 10（含复选框列，无分类列）', i6ths.length === 10, i6ths.length);
+  check('表格列数 = 11（含复选框列、无分类列、含备注列）', i6ths.length === 11, i6ths.join(','));
   // 编辑商品弹窗无分类字段
   i6.App.editProduct();
   check('编辑弹窗无分类输入框 #f_cat', !i6.$('#f_cat'));
