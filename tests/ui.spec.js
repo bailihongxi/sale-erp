@@ -666,6 +666,51 @@ async function run() {
     !/\.pos\s*\{[^}]*grid-template-columns:\s*380px/.test(n3css));
 
   /* ========================================================
+     N4 开单产品列表分页展示（每页最多 300 个，问题2）
+     ======================================================== */
+  section('N4 开单产品列表分页展示（每页≤300）');
+  // 常态（≤300）：单页全部渲染，不出现分页按钮（沿用旧行为，避免小目录多出分页条）
+  var n4 = boot({ hash: '#pos' });
+  var n4seed = n4.DB.all('products').length; // 8
+  check('开单网格默认渲染全部商品（≤300 单页）', n4.$$('#posGrid .prod-card').length === n4seed,
+    n4.$$('#posGrid .prod-card').length + ' vs ' + n4seed);
+  check('≤300 时不出现「下一页」分页按钮', !n4.$('#posPager [data-pg="next"]'));
+  check('单页时分页条仅显示数量信息', /共\s*\d+\s*个/.test(n4.$('#posPager').textContent));
+
+  // 大数据量（>300）：触发分页，每页最多 POS_PAGE_SIZE 张卡，避免一次性渲染全部导致卡顿
+  var PAGE4 = n4.App.POS_PAGE_SIZE; // 300
+  var arr4 = [];
+  for (var j = 0; j < 301; j++) {
+    arr4.push({ name: '批量商品' + j, brand: 'B' + (j % 50), model: 'M' + j, type: '测试仪', unit: '台', priceWholesale: 100, priceRetail: 120, stock: 1, lowStock: 1 });
+  }
+  n4.DB.insertBatch('products', arr4);
+  n4.App.routeSync(); // 重新渲染开单网格
+  var n4total = n4.DB.all('products').length; // 8(种子) + 301 = 309
+  check('每页最多渲染 POS_PAGE_SIZE 张卡', n4.$$('#posGrid .prod-card').length === PAGE4,
+    n4.$$('#posGrid .prod-card').length + ' vs ' + PAGE4);
+  check('>300 时出现「下一页」分页按钮', !!n4.$('#posPager [data-pg="next"]'));
+  check('首页「上一页」按钮禁用', n4.$('#posPager [data-pg="prev"]').disabled === true);
+  check('分页条显示总页数信息', /第\s*1\s*\/\s*\d+\s*页/.test(n4.$('#posPager').textContent), n4.$('#posPager').textContent.trim());
+
+  // 翻到下一页：渲染剩余商品，「上一页」可用
+  n4.click(n4.$('#posPager [data-pg="next"]'));
+  check('翻页后渲染剩余商品', n4.$$('#posGrid .prod-card').length === n4total - PAGE4,
+    n4.$$('#posGrid .prod-card').length + ' vs ' + (n4total - PAGE4));
+  check('翻页后「上一页」可用', n4.$('#posPager [data-pg="prev"]').disabled === false);
+  check('末页「下一页」按钮禁用', n4.$('#posPager [data-pg="next"]').disabled === true);
+
+  // 回到首页并搜索：分页应重置回第 1 页
+  n4.click(n4.$('#posPager [data-pg="prev"]'));
+  n4.$('#posKw').value = '批量商品'; n4.fire(n4.$('#posKw'), 'input');
+  check('搜索后分页重置到第 1 页（首页「上一页」禁用）', n4.$('#posPager [data-pg="prev"]').disabled === true);
+
+  // 点击页码按钮跳转（第 2 页）
+  n4.$('#posKw').value = ''; n4.fire(n4.$('#posKw'), 'input');
+  n4.click(n4.$('#posPager [data-pg="2"]'));
+  check('点击页码按钮跳转到第 2 页', n4.$('#posPager [data-pg="prev"]').disabled === false &&
+    /第\s*2\s*\/\s*\d+\s*页/.test(n4.$('#posPager').textContent), n4.$('#posPager').textContent.trim());
+
+  /* ========================================================
      M 手机端就绪度（S4-02）
      ======================================================== */
   section('M1 视口与移动端标记');

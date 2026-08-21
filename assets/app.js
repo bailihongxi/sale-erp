@@ -6,6 +6,7 @@
   'use strict';
   var DB = window.DB;
   var CUR = '¥';
+  var POS_PAGE_SIZE = 300; // 开单产品列表每页最多渲染数（问题2：分页展示，避免大目录卡顿）
   var app = document.getElementById('view');
   var navEl = document.getElementById('nav');
   var bottomNav = document.getElementById('bottomNav');
@@ -661,7 +662,7 @@
   };
 
   /* ---------- 销售开单（POS） ---------- */
-  var pos = { items: {}, customerId: null, discount: 0, paid: 0, method: '现金', kw: '' };
+  var pos = { items: {}, customerId: null, discount: 0, paid: 0, method: '现金', kw: '', page: 1 };
   views.pos = function () {
     document.getElementById('viewTitle').textContent = '销售开单';
     app.innerHTML =
@@ -671,6 +672,7 @@
       '<div class="card card__pad">' +
       '<div class="search" style="margin-bottom:10px"><span>🔍</span><input id="posKw" placeholder="搜索商品名称/品牌/型号/类型"/></div>' +
       '<div class="prod-grid" id="posGrid"></div>' +
+      '<div class="pos-pager" id="posPager"></div>' +
       '</div>' +
       '</div>';
 
@@ -678,18 +680,32 @@
     renderPosGrid(); renderPosCart();
   };
   /** 搜索范围与商品管理保持一致：名称 + 品牌 + 型号 + 类型（MNR-08） */
-  function filterPos() {
-    var grid = $('#posGrid'); if (!grid) return;
-    Array.prototype.forEach.call(grid.children, function (card) {
-      var t = card.getAttribute('data-s') || '';
-      card.style.display = (!pos.kw || t.indexOf(pos.kw.toLowerCase()) >= 0) ? '' : 'none';
+  function posFilteredList() {
+    var all = DB.all('products');
+    var kw = (pos.kw || '').trim().toLowerCase();
+    if (!kw) return all;
+    return all.filter(function (p) {
+      var s = ((p.name || '') + (p.brand || '') + (p.model || '') + (p.type || '')).toLowerCase();
+      return s.indexOf(kw) >= 0;
     });
+  }
+  /** 搜索：重置回第 1 页并重新渲染（分页随之刷新） */
+  function filterPos() {
+    pos.page = 1;
+    renderPosGrid();
   }
   function renderPosGrid() {
     var grid = $('#posGrid');
     if (!grid) return;
-    var prods = DB.all('products');
-    grid.innerHTML = prods.map(function (p) {
+    // 性能优化：先按关键字筛选，再只取当前页，避免一次性渲染全部商品卡导致卡顿（问题2）
+    var list = posFilteredList();
+    var total = list.length;
+    var pageSize = POS_PAGE_SIZE;
+    var pageCount = Math.max(1, Math.ceil(total / pageSize));
+    if (pos.page < 1 || pos.page > pageCount) pos.page = 1;
+    var start = (pos.page - 1) * pageSize;
+    var pageItems = list.slice(start, start + pageSize);
+    grid.innerHTML = pageItems.map(function (p) {
       var s = ((p.name || '') + (p.brand || '') + (p.model || '') + (p.type || '')).toLowerCase();
       return '<div class="prod-card" data-pid="' + p.id + '" data-s="' + esc(s) + '">' +
         '<div class="pic">📦</div>' +
@@ -709,7 +725,46 @@
       });
       grid.__delegated = true;
     }
-    filterPos();
+    renderPosPager(total, pageCount);
+  }
+  /** 渲染分页条：单页只显示数量；多页显示 上一页/页码/下一页 + 第 X/Y 页 */
+  function renderPosPager(total, pageCount) {
+    var pager = $('#posPager');
+    if (!pager) return;
+    var cur = pos.page;
+    if (pageCount <= 1) {
+      pager.innerHTML = '<span class="pager-info">共 ' + total + ' 个商品</span>';
+      bindPagerOnce();
+      return;
+    }
+    // 窗口化页码：当前页前后各留若干，避免页码过多撑破布局
+    var startP = Math.max(1, cur - 3);
+    var endP = Math.min(pageCount, startP + 6);
+    startP = Math.max(1, endP - 6);
+    var html = '<button class="pager-btn" data-pg="prev"' + (cur <= 1 ? ' disabled' : '') + '>‹ 上一页</button>';
+    for (var p = startP; p <= endP; p++) {
+      html += '<button class="pager-btn' + (p === cur ? ' active' : '') + '" data-pg="' + p + '">' + p + '</button>';
+    }
+    html += '<button class="pager-btn" data-pg="next"' + (cur >= pageCount ? ' disabled' : '') + '>下一页 ›</button>';
+    html += '<span class="pager-info">第 ' + cur + ' / ' + pageCount + ' 页 · 共 ' + total + ' 个</span>';
+    pager.innerHTML = html;
+    bindPagerOnce();
+  }
+  /** 分页条点击（事件委托，整页仅绑定一次）：翻页 / 跳页 */
+  function bindPagerOnce() {
+    var pager = $('#posPager');
+    if (!pager || pager.__delegated) return;
+    pager.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('.pager-btn') : null;
+      if (!btn || btn.disabled) return;
+      var act = btn.getAttribute('data-pg');
+      var pageCount = Math.max(1, Math.ceil(posFilteredList().length / POS_PAGE_SIZE));
+      if (act === 'prev') pos.page = Math.max(1, pos.page - 1);
+      else if (act === 'next') pos.page = Math.min(pageCount, pos.page + 1);
+      else { var np = parseInt(act, 10); if (np >= 1 && np <= pageCount) pos.page = np; }
+      renderPosGrid();
+    });
+    pager.__delegated = true;
   }
   function addPos(pid) {
     var p = DB.get('products', pid); if (!p) return;
@@ -1671,6 +1726,7 @@
   window.App.openSheet = openSheet;
   window.App.closeSheet = closeSheet;
   window.App.routeSync = route;   // 测试钩子：同步触发渲染（jsdom 的 hashchange 是异步的）
+  window.App.POS_PAGE_SIZE = POS_PAGE_SIZE; // 测试钩子：开单每页渲染上限
 
   // 绑定底部「我的」菜单
   document.getElementById('bottomNav').addEventListener('click', function (e) {

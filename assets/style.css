@@ -227,6 +227,18 @@ a{color:inherit;text-decoration:none}
 .cart{position:sticky;top:calc(var(--topbar-h) + 16px)}
 .cart-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--c-border)}
 .prod-cards{display:none}
+/* 开单产品列表分页条（问题2：每页最多 300 个，减少大目录卡顿） */
+.pos-pager{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--c-border)}
+.pager-btn{padding:6px 11px;border:1px solid var(--c-border);border-radius:8px;background:#fff;font-size:13px;cursor:pointer;min-height:34px}
+.pager-btn:hover:not(:disabled){border-color:var(--c-primary);color:var(--c-primary)}
+.pager-btn.active{background:var(--c-primary);border-color:var(--c-primary);color:#fff}
+.pager-btn:disabled{opacity:.45;cursor:not-allowed}
+.pager-info{font-size:12px;color:var(--c-muted);margin-left:auto}
+@media (max-width:768px){
+  .pos-pager{gap:4px}
+  .pager-btn{padding:8px 12px;font-size:14px;min-height:40px}
+  .pager-info{margin-left:0;width:100%;text-align:center}
+}
 .cart-item .nm{flex:1;font-size:13px}
 .qty{display:inline-flex;align-items:center;border:1px solid var(--c-border);border-radius:var(--r-sm);overflow:hidden}
 .qty button{width:26px;height:26px;border:none;background:var(--c-bg);font-size:15px}
