@@ -212,8 +212,8 @@ a{color:inherit;text-decoration:none}
 .right{text-align:right}
 .mono{font-variant-numeric:tabular-nums}
 
-/* 开单两栏 */
-.pos{display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start}
+/* 开单两栏：结算模块与产品模块 1:1 等宽（问题1） */
+.pos{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
 .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .prod-card{border:1px solid var(--c-border);border-radius:var(--r);padding:12px;background:#fff;text-align:center;transition:border .15s,transform .1s;content-visibility:auto;contain-intrinsic-size:auto 96px}
 .prod-card:hover{border-color:var(--c-primary);transform:translateY(-2px)}

@@ -654,6 +654,18 @@ async function run() {
   n1.fire(n1.$('#posKw'), 'input'); // 还原
 
   /* ========================================================
+     N3 开单结算模块与产品模块 1:1 等宽排版（问题1）
+     ======================================================== */
+  section('N3 开单结算与产品模块 1:1 排版');
+  var n3 = boot({ hash: '#pos' });
+  var n3css = helpers.read('assets/style.css');
+  check('桌面端 .pos 两模块等宽 1:1（grid-template-columns:1fr 1fr）',
+    /\.pos\s*\{[^}]*grid-template-columns:\s*1fr\s+1fr/.test(n3css),
+    n3css.match(/\.pos\s*\{[^}]*\}/));
+  check('结算模块不再使用固定 380px 窄宽',
+    !/\.pos\s*\{[^}]*grid-template-columns:\s*380px/.test(n3css));
+
+  /* ========================================================
      M 手机端就绪度（S4-02）
      ======================================================== */
   section('M1 视口与移动端标记');
@@ -822,8 +834,8 @@ async function run() {
   check('结算购物车位于首位（左侧/上方）', !!i2first && i2first.id === 'posCart', i2first && i2first.id);
   check('搜索商品区位于次位（右侧/下方）', !!i2last && !!i2last.querySelector('#posKw'));
   var i2css = helpers.read('assets/style.css');
-  check('桌面端 .pos 列宽先结算区 380px，后商品区 1fr',
-    /\.pos\s*\{[^}]*grid-template-columns:\s*380px[^1-9]*1fr/.test(i2css),
+  check('桌面端 .pos 两模块等宽 1:1（grid-template-columns:1fr 1fr）',
+    /\.pos\s*\{[^}]*grid-template-columns:\s*1fr\s+1fr/.test(i2css),
     i2css.match(/\.pos\s*\{[^}]*\}/));
 
   section('I3 新建进货单重新设计（搜索+添加+产品列表+结算）');
