@@ -692,14 +692,23 @@
     grid.innerHTML = prods.map(function (p) {
       var s = ((p.name || '') + (p.brand || '') + (p.model || '') + (p.type || '')).toLowerCase();
       return '<div class="prod-card" data-pid="' + p.id + '" data-s="' + esc(s) + '">' +
-        '<div class="pic">📦</div><div class="nm">' + esc(p.name) + '</div>' +
-        '<div class="meta">' + esc(p.brand) + ' · ' + esc(p.type) + '</div>' +
-        '<div class="meta">库存 ' + p.stock + ' ' + esc(p.unit) + '</div>' +
-        '<div class="pr">' + money(p.priceWholesale) + '<small>/' + esc(p.unit) + '</small></div></div>';
+        '<div class="pic">📦</div>' +
+        '<div class="nm">' + esc(p.name) + '</div>' +
+        '<div class="meta meta--brand">' + esc(p.brand) + '</div>' +
+        '<div class="meta meta--type">' + esc(p.type) + '</div>' +
+        '<div class="meta meta--stock">库存 ' + p.stock + ' ' + esc(p.unit) + '</div>' +
+        '<div class="pr pr--wholesale">批发价 ' + money(p.priceWholesale) + '<small>/' + esc(p.unit) + '</small></div>' +
+        '<div class="pr pr--retail">销售价 ' + money(p.priceRetail) + '<small>/' + esc(p.unit) + '</small></div>' +
+        '</div>';
     }).join('');
-    Array.prototype.forEach.call(grid.children, function (card) {
-      card.addEventListener('click', function () { addPos(card.getAttribute('data-pid')); });
-    });
+    // 性能优化：用事件委托（整页仅 1 个监听器），避免上千商品时逐个绑定导致卡顿
+    if (!grid.__delegated) {
+      grid.addEventListener('click', function (e) {
+        var card = e.target.closest ? e.target.closest('.prod-card') : null;
+        if (card) addPos(card.getAttribute('data-pid'));
+      });
+      grid.__delegated = true;
+    }
     filterPos();
   }
   function addPos(pid) {

@@ -215,12 +215,14 @@ a{color:inherit;text-decoration:none}
 /* 开单两栏 */
 .pos{display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start}
 .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
-.prod-card{border:1px solid var(--c-border);border-radius:var(--r);padding:12px;background:#fff;text-align:center;transition:border .15s,transform .1s}
+.prod-card{border:1px solid var(--c-border);border-radius:var(--r);padding:12px;background:#fff;text-align:center;transition:border .15s,transform .1s;content-visibility:auto;contain-intrinsic-size:auto 96px}
 .prod-card:hover{border-color:var(--c-primary);transform:translateY(-2px)}
 .prod-card .pic{font-size:30px}
 .prod-card .nm{font-weight:600;font-size:13px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prod-card .meta{font-size:11px;color:var(--c-muted);margin-top:2px}
 .prod-card .pr{color:var(--c-accent);font-weight:700;margin-top:4px}
+/* 销售价仅在手机端显示（桌面显示批发价） */
+.prod-card .pr--retail{display:none}
 
 .cart{position:sticky;top:calc(var(--topbar-h) + 16px)}
 .cart-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--c-border)}
@@ -357,6 +359,12 @@ a{color:inherit;text-decoration:none}
   .sidebar{display:none}
   .topbar{padding:0 14px}
   .topbar h1{font-size:15px}
+
+  /* 手机端开单卡片精简：仅保留 名称 / 类型 / 销售价 */
+  .prod-card .meta--brand{display:none}
+  .prod-card .meta--stock{display:none}
+  .prod-card .pr--wholesale{display:none}
+  .prod-card .pr--retail{display:block}
   .content{padding:14px;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
   .grid--kpi,.grid--2,.grid--3{grid-template-columns:1fr}
   .search{min-width:0;flex:1}

@@ -610,6 +610,50 @@ async function run() {
   check('下载的 CSV 模板含「备注」表头', /备注/.test(i16tpl), i16tpl.slice(0, 140));
 
   /* ========================================================
+     N1 手机端开单卡片精简化 + 加载性能优化
+     ======================================================== */
+  section('N1 手机端开单卡片精简与加载优化');
+  var n1 = boot({ hash: '#pos' });
+  var n1card = n1.$('#posGrid .prod-card');
+  var n1css = helpers.read('assets/style.css');
+  // 桌面端：所有字段都在 DOM 中（brand/stock/wholesale/retail 均渲染，靠 CSS 区分显隐）
+  check('开单卡片含名称节点 .nm', !!n1card.querySelector('.nm'));
+  check('开单卡片含类型节点 .meta--type', !!n1card.querySelector('.meta--type'));
+  check('开单卡片含品牌节点 .meta--brand（桌面显示）', !!n1card.querySelector('.meta--brand'));
+  check('开单卡片含库存节点 .meta--stock（桌面显示）', !!n1card.querySelector('.meta--stock'));
+  check('开单卡片含批发价节点 .pr--wholesale（桌面显示）', !!n1card.querySelector('.pr--wholesale'));
+  check('开单卡片含销售价节点 .pr--retail（手机显示）', !!n1card.querySelector('.pr--retail'));
+
+  // 手机端(≤768px)：隐藏 brand/stock/wholesale，仅显示 name/type/retail(销售价)
+  // 精确定位主响应式块：仅移动端块含「.prod-card .meta--brand{display:none}」这一独有规则
+  var blk768 = (n1css.split(/@media/).filter(function (s) {
+    return /max-width:\s*768px/.test(s) && /\.prod-card \.meta--brand\{display:none/.test(s);
+  })[0]) || '';
+  check('手机端隐藏品牌节点 .meta--brand', /\.prod-card[^{]*\.meta--brand\s*\{[^}]*display:\s*none/.test(blk768));
+  check('手机端隐藏库存节点 .meta--stock', /\.prod-card[^{]*\.meta--stock\s*\{[^}]*display:\s*none/.test(blk768));
+  check('手机端隐藏批发价节点 .pr--wholesale', /\.prod-card[^{]*\.pr--wholesale\s*\{[^}]*display:\s*none/.test(blk768));
+  check('手机端显示销售价节点 .pr--retail（非 display:none）', /\.prod-card[^{]*\.pr--retail\s*\{[^}]*display:\s*(block|inline-block|flex)/.test(blk768));
+  // 桌面默认隐藏 .pr--retail（手机才显示销售价）
+  check('桌面默认隐藏销售价节点 .pr--retail', /\.prod-card[^{]*\.pr--retail\s*\{[^}]*display:\s*none/.test(n1css));
+
+  // 性能优化：长列表渲染不卡顿 —— 卡片启用 content-visibility 跳过屏外渲染
+  check('开单卡片启用 content-visibility:auto（长列表性能优化）', /\.prod-card\s*\{[^}]*content-visibility:\s*auto/.test(n1css));
+
+  // 行为：点击卡片（事件委托）仍能将商品加入购物车
+  var n1cartBefore = n1.$$('#posCart .cart-item').length;
+  n1.click(n1card);
+  check('点击卡片经事件委托加入购物车', n1.$$('#posCart .cart-item').length === n1cartBefore + 1,
+    n1.$$('#posCart .cart-item').length);
+
+  // 行为：按类型搜索在精简后仍然可用
+  var n1type = n1card.querySelector('.meta--type').textContent.trim();
+  var n1total = n1.$$('#posGrid .prod-card').length;
+  n1.$('#posKw').value = n1type.slice(0, 2); n1.fire(n1.$('#posKw'), 'input');
+  var n1shown = n1.$$('#posGrid .prod-card').filter(function (c) { return c.style.display !== 'none'; }).length;
+  check('按类型搜索在精简卡片上仍生效', n1shown < n1total, 'shown=' + n1shown + ' total=' + n1total);
+  n1.fire(n1.$('#posKw'), 'input'); // 还原
+
+  /* ========================================================
      M 手机端就绪度（S4-02）
      ======================================================== */
   section('M1 视口与移动端标记');
