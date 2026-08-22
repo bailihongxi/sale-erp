@@ -668,8 +668,8 @@ async function run() {
   /* ========================================================
      N4 开单产品列表分页展示（每页最多 300 个，问题2）
      ======================================================== */
-  section('N4 开单产品列表分页展示（每页≤300）');
-  // 常态（≤300）：单页全部渲染，不出现分页按钮（沿用旧行为，避免小目录多出分页条）
+  section('N4 开单产品列表分页展示（每页≤200）');
+  // 常态（≤200）：单页全部渲染，不出现分页按钮（沿用旧行为，避免小目录多出分页条）
   var n4 = boot({ hash: '#pos' });
   var n4seed = n4.DB.all('products').length; // 8
   check('开单网格默认渲染全部商品（≤300 单页）', n4.$$('#posGrid .prod-card').length === n4seed,
@@ -882,6 +882,12 @@ async function run() {
   check('桌面端 .pos 两模块等宽 1:1（grid-template-columns:1fr 1fr）',
     /\.pos\s*\{[^}]*grid-template-columns:\s*1fr\s+1fr/.test(i2css),
     i2css.match(/\.pos\s*\{[^}]*\}/));
+  // 开单页搜索框红色醒目标识
+  check('开单页搜索框有红色边框样式', /\.pos \.search input\{[^}]*border:\s*2px solid #ef4444/.test(i2css),
+    i2css.match(/\.pos \.search input\{[^}]*\}/));
+  check('开单页搜索框有红色背景', /\.pos \.search input\{[^}]*background:\s*#fef2f2/.test(i2css));
+  // 开单产品分页每页200条
+  check('开单产品分页每页200条', i2.App.POS_PAGE_SIZE === 200, i2.App.POS_PAGE_SIZE);
 
   section('I3 新建进货单重新设计（搜索+添加+产品列表+结算）');
   var i3 = boot({ hash: '#purchase' });
@@ -1035,7 +1041,13 @@ async function run() {
   check('卡片只有2行（.product-card__row）', !!firstCard && firstCard.querySelectorAll('.product-card__row').length === 2,
     firstCard.querySelectorAll('.product-card__row').length);
   check('卡片不含品牌字段', !!firstCard && !/品牌/.test(firstCard.textContent));
-  check('卡片不含编辑按钮', !firstCard.querySelector('.btn'));
+  check('卡片含编辑按钮', !!firstCard.querySelector('.product-card__edit'));
+  check('编辑按钮点击可打开编辑弹窗', (function () {
+    var btn = firstCard.querySelector('.product-card__edit');
+    if (btn) { i5.click(btn); return i5.$('#modalMask').classList.contains('show'); }
+    return false;
+  })());
+  i5.App.closeModal();
   check('卡片不含低库存标签', !firstCard.querySelector('.tag--danger'));
   var i5css = helpers.read('assets/style.css');
   check('CSS 在手机端隐藏桌面表格', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.prod-table\s*\{\s*display:\s*none/.test(i5css));
@@ -1077,6 +1089,9 @@ async function run() {
   check('手机端有批量导入按钮', /批量导入/.test(i7.$('#view').textContent));
   check('手机端无分类下拉菜单', !i7.$('#prodCat'));
   check('手机端有搜索框 #prodKw', !!i7.$('#prodKw'));
+  var i7css = helpers.read('assets/style.css');
+  check('手机端商品搜索框有红色边框样式', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.prod-filter \.search input\{[^}]*border:\s*2px solid #ef4444/.test(i7css));
+  check('手机端商品搜索框有红色背景', /@media[\s\S]*max-width:\s*768px[\s\S]*?\.prod-filter \.search input\{[^}]*background:\s*#fef2f2/.test(i7css));
   check('手机端无 .cats 容器', !i7.$('.cats'));
   check('手机端有卡片容器 #prodCards', !!i7.$('#prodCards'));
   check('手机端卡片数 = 商品数', i7.$$('#prodCards .product-card').length === i7.DB.all('products').length);

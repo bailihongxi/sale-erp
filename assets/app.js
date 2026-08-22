@@ -6,7 +6,7 @@
   'use strict';
   var DB = window.DB;
   var CUR = '¥';
-  var POS_PAGE_SIZE = 300; // 开单产品列表每页最多渲染数（问题2：分页展示，避免大目录卡顿）
+  var POS_PAGE_SIZE = 200; // 开单产品列表每页最多渲染数（分页展示，避免大目录卡顿）
   var app = document.getElementById('view');
   var navEl = document.getElementById('nav');
   var bottomNav = document.getElementById('bottomNav');
@@ -381,6 +381,7 @@
               '<span>进' + money(p.priceWholesale) + '</span>' +
               '<span>售' + money(p.priceRetail) + '</span>' +
               '<span>库存' + p.stock + esc(p.unit) + '</span>' +
+              '<button class="btn btn--sm product-card__edit" onclick="App.editProduct(\'' + p.id + '\')">编辑</button>' +
             '</div>' +
             (p.remark ? '<div class="product-card__row"><span class="muted product-card__remark">备注：' + esc(p.remark) + '</span></div>' : '') +
           '</div>';
