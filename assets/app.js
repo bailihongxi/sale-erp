@@ -1603,7 +1603,7 @@
     if (!token) { toast('请输入 GitHub Token', 'err'); return; }
     if (!repo || repo.split('/').length !== 2) { toast('仓库格式应为 owner/repo', 'err'); return; }
     if (!path) { toast('请输入文件路径', 'err'); return; }
-    DB.saveSettings({ ghRepo: repo, ghBranch: branch, ghPath: path });
+    DB.saveSettings({ ghRepo: repo, ghBranch: branch, ghPath: path, ghToken: token });
     var api = 'https://api.github.com/repos/' + repo + '/contents/' + encodeURIComponent(path);
     var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
     var content = b64u(DB.exportData());
@@ -1630,6 +1630,94 @@
       })
       .catch(function (e) { toast('同步失败：' + (e && e.message || e), 'err'); });
     }
+  };
+  /** 数据管理页一键同步：将本地数据推送到 GitHub 仓库，供在线版本读取 */
+  window.App.pushDataToOnline = function () {
+    var s = DB.settings();
+    var token = s.ghToken;
+    var repo = s.ghRepo;
+    var branch = s.ghBranch || 'main';
+    var path = s.ghPath || 'data/state.json';
+    var statusEl = $('#syncStatus');
+    if (!token) { toast('请先在设置页配置 GitHub Token', 'err'); if (statusEl) statusEl.textContent = '⚠️ 未配置 GitHub Token，请点击「配置GitHub」'; return; }
+    if (!repo || repo.split('/').length !== 2) { toast('请先在设置页配置仓库（owner/repo）', 'err'); if (statusEl) statusEl.textContent = '⚠️ 未配置仓库，请点击「配置GitHub」'; return; }
+    if (statusEl) statusEl.textContent = '⏳ 正在同步数据到 GitHub...';
+    var api = 'https://api.github.com/repos/' + repo + '/contents/' + encodeURIComponent(path);
+    var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
+    var content = b64u(DB.exportData());
+    fetch(api + '?ref=' + encodeURIComponent(branch), { method: 'GET', headers: headers })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { return doPush(data && data.sha); })
+      .catch(function () { return doPush(null); });
+    function doPush(sha) {
+      var body = { message: 'Sync ERP data @ ' + new Date().toISOString(), content: content, branch: branch };
+      if (sha) body.sha = sha;
+      fetch(api, {
+        method: 'PUT',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+        body: JSON.stringify(body)
+      })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
+      .then(function (res) {
+        if (res.ok) {
+          var msg = '✅ 数据已同步到 GitHub（' + new Date().toLocaleString() + '），在线网页版和手机版打开时将自动检测更新';
+          if (statusEl) statusEl.textContent = msg;
+          toast('数据同步成功', 'ok');
+        } else {
+          var err = '❌ 同步失败：' + ((res.json && res.json.message) || res.status);
+          if (statusEl) statusEl.textContent = err;
+          toast('同步失败', 'err');
+        }
+      })
+      .catch(function (e) {
+        var err = '❌ 同步失败：' + (e && e.message || e);
+        if (statusEl) statusEl.textContent = err;
+        toast('同步失败', 'err');
+      });
+    }
+  };
+  /** 从 GitHub 拉取远程数据，比较后提示导入 */
+  window.App.pullDataFromOnline = function () {
+    var s = DB.settings();
+    var token = s.ghToken;
+    var repo = s.ghRepo;
+    var branch = s.ghBranch || 'main';
+    var path = s.ghPath || 'data/state.json';
+    var statusEl = $('#syncStatus');
+    if (!token || !repo) { toast('请先在设置页配置 GitHub', 'err'); if (statusEl) statusEl.textContent = '⚠️ 未配置 GitHub，请点击「配置GitHub」'; return; }
+    if (statusEl) statusEl.textContent = '⏳ 正在检查在线版本数据...';
+    var api = 'https://api.github.com/repos/' + repo + '/contents/' + encodeURIComponent(path) + '?ref=' + encodeURIComponent(branch);
+    var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
+    fetch(api, { method: 'GET', headers: headers })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.content) {
+          if (statusEl) statusEl.textContent = 'ℹ️ 在线版本暂无数据文件';
+          toast('在线版本暂无数据', 'ok');
+          return;
+        }
+        var remoteJson = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+        var remoteData;
+        try { remoteData = JSON.parse(remoteJson); } catch (e) { if (statusEl) statusEl.textContent = '❌ 远程数据解析失败'; toast('远程数据格式错误', 'err'); return; }
+        var remoteTime = (remoteData.__meta && remoteData.__meta.exportedAt) || remoteData._syncTime || (data.commit && data.commit.commit && data.commit.commit.author && data.commit.commit.author.date);
+        var localCount = DB.all('products').length;
+        var remoteCount = (remoteData.products || []).length;
+        var msg = '📥 在线版本数据：商品 ' + remoteCount + ' 条（本地 ' + localCount + ' 条），最后更新 ' + (remoteTime ? new Date(remoteTime).toLocaleString() : '未知');
+        if (statusEl) statusEl.textContent = msg;
+        if (remoteCount > 0 && confirm('检测到在线版本有 ' + remoteCount + ' 条商品数据，是否导入覆盖本地数据？\n\n（导入前建议先导出本地备份）')) {
+          try {
+            DB.importData(remoteJson);
+            toast('已从在线版本导入数据', 'ok');
+            route();
+          } catch (e) {
+            toast('导入失败：' + e.message, 'err');
+          }
+        }
+      })
+      .catch(function (e) {
+        if (statusEl) statusEl.textContent = '❌ 检查失败：' + (e && e.message || e);
+        toast('检查在线数据失败', 'err');
+      });
   };
   window.App.resetData = function () { window.App.resetBlankConfirm(); };
   window.App.resetBlankConfirm = function () {
@@ -1671,6 +1759,16 @@
         '<button class="btn btn--primary" onclick="App.exportData()">⬇️ 导出备份</button>' +
         '<button class="btn" onclick="App.importData()">⬆️ 导入备份</button>' +
         '<input type="file" id="importFile" accept=".json" style="display:none" onchange="App.doImport(this)"/>' +
+        '</div>' +
+        '<div class="sync-box mt12">' +
+        '<div class="sync-box__title">🚀 一键同步到在线版本</div>' +
+        '<p class="muted sync-box__desc">将本地数据提交到 GitHub 仓库，在线网页版和手机版打开时自动检测并提示导入更新，无需手动导出导入。</p>' +
+        '<div class="row wrap" style="gap:8px">' +
+        '<button class="btn btn--primary" onclick="App.pushDataToOnline()">📤 提交同步数据</button>' +
+        '<button class="btn btn--sm" onclick="App.pullDataFromOnline()">📥 检查在线更新</button>' +
+        '<button class="btn btn--sm" onclick="route(\'#settings\')">⚙️ 配置GitHub</button>' +
+        '</div>' +
+        '<div id="syncStatus" class="muted mt8" style="font-size:12px"></div>' +
         '</div>') +
       card('存储信息',
         '<div class="settle-line"><span>店铺</span><span class="v">' + esc(s.shopName) + '</span></div>' +

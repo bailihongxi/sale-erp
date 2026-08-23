@@ -82,6 +82,10 @@ function boot(opts) {
   // 默认让 confirm 返回 true，便于测试删除/重置类操作；测试内可覆盖
   window.confirm = function () { return true; };
   window.alert = function () { };
+  // jsdom 未实现 fetch，提供默认 mock（测试内可覆盖 window.fetch 或 global.fetch）
+  if (!window.fetch) {
+    window.fetch = function () { return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({}); } }); };
+  }
 
   if (typeof opts.beforeApp === 'function') opts.beforeApp(window);
 

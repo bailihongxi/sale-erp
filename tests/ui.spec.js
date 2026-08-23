@@ -1023,6 +1023,38 @@ async function run() {
   check('GitHub 同步全程无 JS 错误', i4.errors.length + i4b.errors.length === 0,
     [i4.errors, i4b.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
+  section('I4b 数据管理页一键同步到在线版本');
+  var i4c = boot({ hash: '#data' });
+  check('数据管理页有「提交同步数据」按钮', !!i4c.$('button[onclick="App.pushDataToOnline()"]'));
+  check('数据管理页有「检查在线更新」按钮', !!i4c.$('button[onclick="App.pullDataFromOnline()"]'));
+  check('数据管理页有同步状态显示区', !!i4c.$('#syncStatus'));
+  check('pushDataToOnline 函数存在', typeof i4c.App.pushDataToOnline === 'function');
+  check('pullDataFromOnline 函数存在', typeof i4c.App.pullDataFromOnline === 'function');
+  // 未配置token时不调用fetch
+  var i4cCalls = [];
+  var origFetch = global.fetch;
+  global.fetch = function (url, opts) { i4cCalls.push({ url: url, method: (opts && opts.method) || 'GET' }); return Promise.resolve({ ok: true, json: function () { return Promise.resolve({}); } }); };
+  i4c.window.fetch = global.fetch;
+  i4c.App.pushDataToOnline();
+  check('未配置token时push不调用fetch', i4cCalls.length === 0);
+  check('未配置token时显示状态提示', /未配置|Token/.test(i4c.$('#syncStatus').textContent));
+  // 配置后调用fetch
+  i4c.DB.saveSettings({ ghToken: 'fake-token', ghRepo: 'bailihongxi/sale-erp', ghBranch: 'main', ghPath: 'data/state.json' });
+  i4c.App.pushDataToOnline();
+  check('配置后push发起GET请求获取SHA', i4cCalls.length >= 1 && i4cCalls[0].method === 'GET', i4cCalls.length + ' calls');
+  check('GET URL含仓库和文件路径', /api\.github\.com\/repos\/bailihongxi\/sale-erp\/contents/.test(i4cCalls[0].url));
+  global.fetch = origFetch;
+  // syncToGitHub保存token到设置
+  var i4d = boot({ hash: '#settings' });
+  i4d.$('#ghToken').value = 'saved-token-123';
+  i4d.$('#ghRepo').value = 'owner/repo';
+  i4d.$('#ghBranch').value = 'main';
+  i4d.$('#ghPath').value = 'data/state.json';
+  i4d.App.syncToGitHub();
+  check('syncToGitHub保存token到设置', i4d.DB.settings().ghToken === 'saved-token-123');
+  check('数据管理页同步功能全程无JS错误', i4c.errors.length + i4d.errors.length === 0,
+    [i4c.errors, i4d.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
   section('I5 手机端商品页卡片布局（两行显示）');
   var i5 = boot({ hash: '#products' });
   check('商品页保留桌面表格', !!i5.$('#prodBody') && i5.$$('#prodBody tr').length > 0);

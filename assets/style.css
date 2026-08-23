@@ -229,6 +229,10 @@ a{color:inherit;text-decoration:none}
 .prod-card .pr--retail{display:none}
 
 .cart{position:sticky;top:calc(var(--topbar-h) + 16px)}
+/* 数据管理页一键同步区域 */
+.sync-box{border:1px solid var(--c-border);border-radius:var(--r);padding:12px;background:linear-gradient(135deg,#f0f9ff 0%,#fef3c7 100%)}
+.sync-box__title{font-weight:600;font-size:14px;margin-bottom:4px}
+.sync-box__desc{font-size:12px;margin:0 0 8px 0}
 .cart-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--c-border)}
 .prod-cards{display:none}
 /* 开单产品列表分页条（问题2：每页最多 300 个，减少大目录卡顿） */
