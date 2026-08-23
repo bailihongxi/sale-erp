@@ -1107,6 +1107,29 @@ async function run() {
   check('本地/在线版本区分全程无JS错误', i4e.errors.length + i4f.errors.length + i4h.errors.length === 0,
     [i4e.errors, i4f.errors, i4h.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
+  section('I4d 在线版本启动时自动从云端同步数据');
+  // 在线版本调用autoPullFromOnline会fetch远程数据
+  var i4i = boot({ hash: '#dashboard', url: 'https://bailihongxi.github.io/sale-erp/' });
+  var i4iFetchCalls = [];
+  i4i.window.fetch = function (url, opts) {
+    i4iFetchCalls.push({ url: url, method: (opts && opts.method) || 'GET' });
+    return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve('{"products":[],"__meta":{"exportedAt":"2026-01-01T00:00:00.000Z"}}'); } });
+  };
+  i4i.App.autoPullFromOnline();
+  check('在线版本调用autoPullFromOnline会fetch远程数据', i4iFetchCalls.length >= 1, i4iFetchCalls.length + ' calls');
+  check('拉取URL使用raw.githubusercontent.com', i4iFetchCalls.length > 0 && /raw\.githubusercontent\.com/.test(i4iFetchCalls[0].url), i4iFetchCalls[0] && i4iFetchCalls[0].url);
+  check('拉取URL包含正确的owner和repo', i4iFetchCalls.length > 0 && /bailihongxi\/sale-erp/.test(i4iFetchCalls[0].url), i4iFetchCalls[0] && i4iFetchCalls[0].url);
+  check('拉取URL包含data/state.json路径', i4iFetchCalls.length > 0 && /data\/state\.json/.test(i4iFetchCalls[0].url), i4iFetchCalls[0] && i4iFetchCalls[0].url);
+  // 本地版本调用autoPullFromOnline不会fetch
+  var i4j = boot({ hash: '#dashboard' }); // 默认URL是local.test，本地版本
+  var i4jFetchCalls = [];
+  i4j.window.fetch = function (url, opts) { i4jFetchCalls.push({ url: url }); return Promise.resolve({ ok: true, json: function () { return Promise.resolve({}); } }); };
+  i4j.App.autoPullFromOnline();
+  check('本地版本调用autoPullFromOnline不fetch远程数据', i4jFetchCalls.length === 0, i4jFetchCalls.length + ' calls');
+  check('autoPullFromOnline函数存在', typeof i4i.App.autoPullFromOnline === 'function');
+  check('在线版本自动同步全程无JS错误', i4i.errors.length + i4j.errors.length === 0,
+    [i4i.errors, i4j.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
   section('I5 手机端商品页卡片布局（两行显示）');
   var i5 = boot({ hash: '#products' });
   check('商品页保留桌面表格', !!i5.$('#prodBody') && i5.$$('#prodBody tr').length > 0);

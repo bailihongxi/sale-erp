@@ -1593,6 +1593,55 @@
     document.getElementById('shopName').textContent = DB.settings().shopName;
     toast('设置已保存', 'ok');
   };
+  /** 在线版本启动时自动从 GitHub 拉取最新数据并加载（从 URL 推断仓库信息，无需配置 Token） */
+  function autoPullFromOnline() {
+    if (isLocalVersion()) return; // 本地版本不自动拉取
+    // 从 GitHub Pages URL 推断 owner/repo：https://{owner}.github.io/{repo}/
+    var host = location.hostname || '';
+    var path = location.pathname || '/';
+    var ownerMatch = host.match(/^([^.]+)\.github\.io$/);
+    if (!ownerMatch) return; // 不是 GitHub Pages，不处理
+    var owner = ownerMatch[1];
+    var repo = path.replace(/^\//, '').replace(/\/.*$/, '') || 'sale-erp';
+    var branch = 'main';
+    var dataPath = 'data/state.json';
+    var rawUrl = 'https://raw.githubusercontent.com/' + owner + '/' + repo + '/' + branch + '/' + dataPath;
+    fetch(rawUrl, { method: 'GET', cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function (text) {
+        if (!text || text.trim() === '') return;
+        var remoteData;
+        try { remoteData = JSON.parse(text); } catch (e) { return; }
+        if (!remoteData || !Array.isArray(remoteData.products)) return;
+        // 比较远程和本地商品数量，有差异才导入
+        var localCount = DB.all('products').length;
+        var remoteCount = remoteData.products.length;
+        if (remoteCount === 0 && localCount > 0) return; // 远程无数据，不覆盖本地
+        if (remoteCount === localCount && localCount > 0) {
+          // 数量相同，比较最后更新时间
+          var remoteTime = (remoteData.__meta && remoteData.__meta.exportedAt) || '';
+          var localTime = (DB.settings() && DB.settings().lastExportAt) || '';
+          if (remoteTime && localTime && remoteTime <= localTime) return; // 本地数据更新，不覆盖
+        }
+        // 导入远程数据
+        try {
+          DB.importData(text);
+          var s = DB.settings();
+          document.getElementById('brandName').textContent = s.shopName;
+          document.getElementById('shopName').textContent = s.shopName;
+          toast('已从云端同步最新数据（' + remoteCount + ' 种商品）', 'ok');
+          route(); // 重新渲染当前页面
+        } catch (e) {
+          console.warn('自动同步数据失败:', e);
+        }
+      })
+      .catch(function (e) {
+        console.log('云端数据暂不可用，使用本地数据:', e.message);
+      });
+  }
   /** 判断是否为本地版本（localhost / 127.0.0.1 / file:// / 测试环境），在线版本（GitHub Pages）隐藏同步功能 */
   function isLocalVersion() {
     var host = location.hostname || '';
@@ -1907,6 +1956,7 @@
   window.App.closeSheet = closeSheet;
   window.App.routeSync = route;   // 测试钩子：同步触发渲染（jsdom 的 hashchange 是异步的）
   window.App.isLocalVersion = isLocalVersion; // 测试钩子：判断是否本地版本
+  window.App.autoPullFromOnline = autoPullFromOnline; // 测试钩子：在线版本自动同步
   window.App.POS_PAGE_SIZE = POS_PAGE_SIZE; // 测试钩子：开单每页渲染上限
 
   // 绑定底部「我的」菜单
@@ -1983,4 +2033,5 @@
   document.getElementById('shopName').textContent = s0.shopName;
   renderNav();
   route();
+  autoPullFromOnline(); // 在线版本启动时自动从云端同步最新数据
 })();
