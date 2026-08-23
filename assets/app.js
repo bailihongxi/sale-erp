@@ -827,6 +827,7 @@
       '<div class="settle-line"><span>应收合计</span><span class="v">' + money(total) + '</span></div>' +
       '<div class="field" style="margin:8px 0"><label>实收金额</label><input id="posPaid" type="number" value="' + paid + '"/></div>' +
       '<div class="field"><label>收款方式</label><select id="posMethod"><option ' + (pos.method === '现金' ? 'selected' : '') + '>现金</option><option ' + (pos.method === '微信' ? 'selected' : '') + '>微信</option><option ' + (pos.method === '支付宝' ? 'selected' : '') + '>支付宝</option><option ' + (pos.method === '银行' ? 'selected' : '') + '>银行</option><option ' + (pos.method === '欠款' ? 'selected' : '') + '>欠款</option></select></div>' +
+      '<div class="field" style="margin:8px 0"><label>备注</label><textarea id="posRemark" rows="2" placeholder="可填写销售备注信息，如送货地址、特殊要求等" style="width:100%;resize:vertical">' + esc(pos.remark || '') + '</textarea></div>' +
       '<div class="settle-line"><span>欠款</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' +
       (over.length ? '<div class="cart-warn" style="display:block;margin-top:8px;padding:6px 8px">库存不足：' + esc(over.join('、')) + '，请调整数量或先入库</div>' : '') +
       '<button class="btn btn--primary btn--block mt12" onclick="App.settlePos()">💰 确认结算</button>' +
@@ -843,6 +844,7 @@
     $('#posDisc').addEventListener('input', function (e) { pos.discount = parseFloat(e.target.value) || 0; renderPosCart(); });
     $('#posPaid').addEventListener('input', function (e) { pos.paid = parseFloat(e.target.value) || 0; renderPosCart(); });
     $('#posMethod').addEventListener('change', function (e) { pos.method = e.target.value; });
+    $('#posRemark').addEventListener('input', function (e) { pos.remark = e.target.value; });
     Array.prototype.forEach.call(c.querySelectorAll('.cart-item'), function (row) {
       var pid = row.getAttribute('data-pid');
       row.querySelector('[data-act="inc"]').addEventListener('click', function () { pos.items[pid].qty++; renderPosCart(); });
@@ -906,14 +908,14 @@
     var paid = pos.method === '欠款' ? 0 : (pos.paid || 0);
     var o;
     try {
-      o = DB.recordSale({ customerId: custId, customerName: custName, items: items, discount: pos.discount || 0, paid: paid, method: method });
+      o = DB.recordSale({ customerId: custId, customerName: custName, items: items, discount: pos.discount || 0, paid: paid, method: method, remark: pos.remark || '' });
     } catch (e) {
       // 库存不足整单拒绝：保留购物车内容，方便用户改数量或先入库（BUG-02 UI 侧）
       if (e && (e.code === 'OUT_OF_STOCK' || e.code === 'EMPTY_ITEMS')) { toast(e.message, 'err'); renderPosCart(); return; }
       toast('开单失败：' + (e && e.message || e), 'err');
       return;
     }
-    pos.items = {}; pos.discount = 0; pos.paid = 0; pos.method = '现金';
+    pos.items = {}; pos.discount = 0; pos.paid = 0; pos.method = '现金'; pos.remark = '';
     toast('开单成功：' + o.no, 'ok');
     renderPosGrid();          // 库存已变化，同步刷新商品卡上的库存数字
     renderPosCart();
@@ -978,7 +980,8 @@
       '<table class="table mt12"><thead><tr><th>商品</th><th>单位</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>' + items + '</tbody></table>' +
       '<div class="settle-line"><span>应收合计</span><span class="v">' + money(o.total) + '</span></div>' +
       '<div class="settle-line"><span>已收</span><span class="v">' + money(o.paid) + '</span></div>' +
-      '<div class="settle-line total"><span>欠款</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>', foot);
+      '<div class="settle-line total"><span>欠款</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' +
+      (o.remark ? '<div class="settle-line" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--c-border)"><span style="vertical-align:top">备注</span><span class="v" style="text-align:left;white-space:pre-wrap;max-width:70%">' + esc(o.remark) + '</span></div>' : ''), foot);
   };
   window.App.receiveSale = function (id) {
     var o = DB.get('sales', id); if (!o) return;

@@ -889,6 +889,47 @@ async function run() {
   // 开单产品分页每页200条
   check('开单产品分页每页200条', i2.App.POS_PAGE_SIZE === 200, i2.App.POS_PAGE_SIZE);
 
+  section('I2b 销售开单结算备注栏');
+  var i2b = boot({ hash: '#pos' });
+  // 添加商品到购物车（点击商品卡片）
+  var firstCard = i2b.$('#posGrid .prod-card');
+  check('开单页有商品卡片可点击', !!firstCard);
+  if (firstCard) i2b.click(firstCard);
+  // 结算弹窗有备注输入框
+  check('结算弹窗有备注输入框 #posRemark', !!i2b.$('#posRemark'));
+  check('备注输入框是textarea类型', i2b.$('#posRemark') && i2b.$('#posRemark').tagName === 'TEXTAREA');
+  // 输入备注并结算
+  if (i2b.$('#posRemark')) {
+    i2b.$('#posRemark').value = '测试销售备注：送货上门';
+    i2b.fire(i2b.$('#posRemark'), 'input');
+  }
+  i2b.App.settlePos();
+  // 验证销售单保存了备注
+  var sales = i2b.DB.all('sales');
+  check('结算后生成销售单', sales.length > 0, sales.length + ' sales');
+  if (sales.length > 0) {
+    var lastSale = sales[sales.length - 1];
+    check('销售单保存备注信息', lastSale.remark === '测试销售备注：送货上门', lastSale.remark);
+    // 销售单详情显示备注
+    i2b.App.openSale(lastSale.id);
+    check('销售单详情显示备注内容', /测试销售备注/.test(i2b.$('#modalBody').textContent), i2b.$('#modalBody').textContent.slice(0, 200));
+    i2b.App.closeModal();
+  }
+  // 无备注的销售单详情不显示备注行
+  var i2b2 = boot({ hash: '#pos' });
+  var card2 = i2b2.$('#posGrid .prod-card');
+  if (card2) i2b2.click(card2);
+  i2b2.App.settlePos();
+  var sales2 = i2b2.DB.all('sales');
+  if (sales2.length > 0) {
+    var saleNoRemark = sales2[sales2.length - 1];
+    check('无备注的销售单remark为空', !saleNoRemark.remark);
+    i2b2.App.openSale(saleNoRemark.id);
+    check('无备注的销售单详情不显示备注标签', !/备注/.test(i2b2.$('#modalBody').textContent));
+  }
+  check('销售开单备注功能全程无JS错误', i2b.errors.length + i2b2.errors.length === 0,
+    [i2b.errors, i2b2.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
   section('I3 新建进货单重新设计（搜索+添加+产品列表+结算）');
   var i3 = boot({ hash: '#purchase' });
   i3.App.openPurchaseForm();

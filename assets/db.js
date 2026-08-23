@@ -304,7 +304,8 @@
       id: uid(), no: no, date: todayStr(), ts: Date.now(),
       customerId: p.customerId || null,
       customerName: (cust && cust.name) || p.customerName || '散客',
-      items: items, discount: discount, total: total, paid: paid, method: p.method || '现金'
+      items: items, discount: discount, total: total, paid: paid, method: p.method || '现金',
+      remark: p.remark || ''
     };
     state.sales.push(order);
     items.forEach(function (it) {
