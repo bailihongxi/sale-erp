@@ -1595,13 +1595,13 @@
   };
   /** base64 编码（支持中文） */
   function b64u(s) { return btoa(unescape(encodeURIComponent(s))); }
-  /** 导出用于同步到 GitHub 的数据（移除 ghToken 等敏感字段，避免被 GitHub 密钥扫描拦截） */
+  /** 导出用于同步到 GitHub 的数据（移除 ghToken 等敏感字段，使用紧凑格式减小体积） */
   function exportDataForSync() {
     var data = JSON.parse(DB.exportData());
     if (data.settings) {
       delete data.settings.ghToken;
     }
-    return JSON.stringify(data, null, 2);
+    return JSON.stringify(data); // 紧凑格式，无空格，减小文件体积
   }
   window.App.syncToGitHub = function () {
     var token = $('#ghToken').value.trim();
@@ -1639,7 +1639,7 @@
       .catch(function (e) { toast('同步失败：' + (e && e.message || e), 'err'); });
     }
   };
-  /** 数据管理页一键同步：将本地数据推送到 GitHub 仓库，供在线版本读取 */
+  /** 数据管理页一键同步：将本地数据推送到 GitHub 仓库，供在线版本读取（使用 Git Data API 支持大文件） */
   window.App.pushDataToOnline = function () {
     var s = DB.settings();
     var token = s.ghToken;
@@ -1650,38 +1650,103 @@
     if (!token) { toast('请先在设置页配置 GitHub Token', 'err'); if (statusEl) statusEl.textContent = '⚠️ 未配置 GitHub Token，请点击「配置GitHub」'; return; }
     if (!repo || repo.split('/').length !== 2) { toast('请先在设置页配置仓库（owner/repo）', 'err'); if (statusEl) statusEl.textContent = '⚠️ 未配置仓库，请点击「配置GitHub」'; return; }
     if (statusEl) statusEl.textContent = '⏳ 正在同步数据到 GitHub...';
-    var api = 'https://api.github.com/repos/' + repo + '/contents/' + encodeURIComponent(path);
-    var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
+    var apiBase = 'https://api.github.com/repos/' + repo;
+    var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
     var content = b64u(exportDataForSync());
-    fetch(api + '?ref=' + encodeURIComponent(branch), { method: 'GET', headers: headers })
-      .then(function (r) { return r.json(); })
-      .then(function (data) { return doPush(data && data.sha); })
-      .catch(function () { return doPush(null); });
-    function doPush(sha) {
-      var body = { message: 'Sync ERP data @ ' + new Date().toISOString(), content: content, branch: branch };
-      if (sha) body.sha = sha;
-      fetch(api, {
-        method: 'PUT',
-        headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
-        body: JSON.stringify(body)
-      })
-      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
+    var message = 'Sync ERP data @ ' + new Date().toISOString();
+
+    // 步骤1：获取分支最新 commit SHA
+    fetch(apiBase + '/git/ref/heads/' + encodeURIComponent(branch), { method: 'GET', headers: headers })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
       .then(function (res) {
-        if (res.ok) {
-          var msg = '✅ 数据已同步到 GitHub（' + new Date().toLocaleString() + '），在线网页版和手机版打开时将自动检测更新';
-          if (statusEl) statusEl.textContent = msg;
-          toast('数据同步成功', 'ok');
-        } else {
-          var err = '❌ 同步失败：' + ((res.json && res.json.message) || res.status);
-          if (statusEl) statusEl.textContent = err;
-          toast('同步失败', 'err');
-        }
+        if (!res.ok || !res.json.object || !res.json.object.sha) throw new Error('获取分支信息失败：' + (res.json.message || res.json));
+        return step2(res.json.object.sha);
       })
-      .catch(function (e) {
-        var err = '❌ 同步失败：' + (e && e.message || e);
-        if (statusEl) statusEl.textContent = err;
-        toast('同步失败', 'err');
-      });
+      .catch(function (e) { showSyncError(e); });
+
+    // 步骤2：获取 commit 的 tree SHA
+    function step2(commitSha) {
+      fetch(apiBase + '/git/commits/' + commitSha, { method: 'GET', headers: headers })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.json.tree || !res.json.tree.sha) throw new Error('获取 commit tree 失败：' + (res.json.message || res.json));
+          step3(commitSha, res.json.tree.sha);
+        })
+        .catch(function (e) { showSyncError(e); });
+    }
+
+    // 步骤3：创建 blob（支持大文件，最大100MB）
+    function step3(commitSha, baseTreeSha) {
+      fetch(apiBase + '/git/blobs', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ content: content, encoding: 'base64' })
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.json.sha) throw new Error('创建 blob 失败：' + (res.json.message || res.json));
+          step4(commitSha, baseTreeSha, res.json.sha);
+        })
+        .catch(function (e) { showSyncError(e); });
+    }
+
+    // 步骤4：创建新 tree
+    function step4(commitSha, baseTreeSha, blobSha) {
+      fetch(apiBase + '/git/trees', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          base_tree: baseTreeSha,
+          tree: [{ path: path, mode: '100644', type: 'blob', sha: blobSha }]
+        })
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.json.sha) throw new Error('创建 tree 失败：' + (res.json.message || res.json));
+          step5(commitSha, res.json.sha);
+        })
+        .catch(function (e) { showSyncError(e); });
+    }
+
+    // 步骤5：创建新 commit
+    function step5(parentCommitSha, newTreeSha) {
+      fetch(apiBase + '/git/commits', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ message: message, tree: newTreeSha, parents: [parentCommitSha] })
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.json.sha) throw new Error('创建 commit 失败：' + (res.json.message || res.json));
+          step6(res.json.sha);
+        })
+        .catch(function (e) { showSyncError(e); });
+    }
+
+    // 步骤6：更新分支引用
+    function step6(newCommitSha) {
+      fetch(apiBase + '/git/refs/heads/' + encodeURIComponent(branch), {
+        method: 'PATCH',
+        headers: headers,
+        body: JSON.stringify({ sha: newCommitSha, force: false })
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+        .then(function (res) {
+          if (res.ok) {
+            var msg = '✅ 数据已同步到 GitHub（' + new Date().toLocaleString() + '），在线网页版和手机版打开时将自动检测更新';
+            if (statusEl) statusEl.textContent = msg;
+            toast('数据同步成功', 'ok');
+          } else {
+            throw new Error('更新分支失败：' + (res.json.message || res.json));
+          }
+        })
+        .catch(function (e) { showSyncError(e); });
+    }
+
+    function showSyncError(e) {
+      var err = '❌ 同步失败：' + (e && e.message || e);
+      if (statusEl) statusEl.textContent = err;
+      toast('同步失败', 'err');
     }
   };
   /** 从 GitHub 拉取远程数据，比较后提示导入 */

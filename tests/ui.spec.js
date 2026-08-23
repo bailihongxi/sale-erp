@@ -1041,8 +1041,8 @@ async function run() {
   // 配置后调用fetch
   i4c.DB.saveSettings({ ghToken: 'fake-token', ghRepo: 'bailihongxi/sale-erp', ghBranch: 'main', ghPath: 'data/state.json' });
   i4c.App.pushDataToOnline();
-  check('配置后push发起GET请求获取SHA', i4cCalls.length >= 1 && i4cCalls[0].method === 'GET', i4cCalls.length + ' calls');
-  check('GET URL含仓库和文件路径', /api\.github\.com\/repos\/bailihongxi\/sale-erp\/contents/.test(i4cCalls[0].url));
+  check('配置后push发起GET请求获取分支信息', i4cCalls.length >= 1 && i4cCalls[0].method === 'GET', i4cCalls.length + ' calls');
+  check('GET URL使用Git Data API获取分支引用', /api\.github\.com\/repos\/bailihongxi\/sale-erp\/git\/ref\/heads/.test(i4cCalls[0].url), i4cCalls[0].url);
   global.fetch = origFetch;
   // syncToGitHub保存token到设置
   var i4d = boot({ hash: '#settings' });
@@ -1056,21 +1056,29 @@ async function run() {
   i4d.DB.saveSettings({ ghToken: 'secret-token-xyz', ghRepo: 'owner/repo' });
   var syncExport = i4d.window.exportDataForSync ? i4d.window.exportDataForSync() : null;
   if (!syncExport) {
-    // exportDataForSync是内部函数，通过检查PUT请求体来验证
+    // exportDataForSync是内部函数，通过检查POST到blobs的请求体来验证
     var i4dCalls = [];
     var origFetch2 = global.fetch;
     global.fetch = function (url, opts) {
       i4dCalls.push({ url: url, method: (opts && opts.method) || 'GET', body: (opts && opts.body) || null });
-      return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ content: { html_url: 'ok' } }); } });
+      // 模拟Git Data API各步骤的返回
+      if (/git\/ref\/heads/.test(url)) return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ object: { sha: 'commit123' } }); } });
+      if (/git\/commits\/commit123/.test(url)) return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ tree: { sha: 'tree123' } }); } });
+      if (/git\/blobs/.test(url)) return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ sha: 'blob123' }); } });
+      if (/git\/trees/.test(url)) return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ sha: 'newtree123' }); } });
+      if (/git\/commits$/.test(url)) return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ sha: 'newcommit123' }); } });
+      if (/git\/refs/.test(url)) return Promise.resolve({ ok: true, json: function () { return Promise.resolve({}); } });
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({}); } });
     };
     i4d.window.fetch = global.fetch;
     i4d.App.pushDataToOnline();
     global.fetch = origFetch2;
-    var putCall = i4dCalls.filter(function (c) { return c.method === 'PUT'; })[0];
-    if (putCall && putCall.body) {
-      var putBody = JSON.parse(putCall.body);
-      var decodedContent = decodeURIComponent(escape(atob(putBody.content.replace(/\n/g, ''))));
+    var blobCall = i4dCalls.filter(function (c) { return /git\/blobs/.test(c.url); })[0];
+    if (blobCall && blobCall.body) {
+      var blobBody = JSON.parse(blobCall.body);
+      var decodedContent = decodeURIComponent(escape(atob(blobBody.content.replace(/\n/g, ''))));
       check('同步数据不含ghToken字段', !/ghToken/.test(decodedContent), decodedContent.slice(0, 200));
+      check('同步数据使用紧凑格式（无空格缩进）', !/\\n\s{2}/.test(decodedContent) || decodedContent.indexOf('  ') < 0, '紧凑格式检查');
     }
   }
   check('数据管理页同步功能全程无JS错误', i4c.errors.length + i4d.errors.length === 0,
