@@ -1025,7 +1025,10 @@
     document.getElementById('viewTitle').textContent = '采购管理';
     var list = DB.all('purchases').slice().sort(function (a, b) { return b.ts - a.ts; });
     var rows = list.map(function (o) {
-      return '<tr data-id="' + o.id + '" class="clk"><td>' + esc(o.no) + '</td><td>' + esc(o.date) + '</td><td>' + esc(o.supplierName) + '</td>' +
+      var isVoid = o.voided === true;
+      var rowCls = isVoid ? 'purchase-row--voided' : '';
+      var voidTag = isVoid ? '<span class="tag tag--danger tag--void">已作废</span>' : '';
+      return '<tr data-id="' + o.id + '" class="clk ' + rowCls + '"><td>' + esc(o.no) + ' ' + voidTag + '</td><td>' + esc(o.date) + '</td><td>' + esc(o.supplierName) + '</td>' +
         '<td class="right mono">' + money(o.total) + '</td><td class="right mono">' + money(o.paid) + '</td>' +
         '<td>' + statusTag(DB.orderStatus(o), 'purchase') + '</td>' +
         '<td class="right"><button class="btn btn--sm" onclick="App.openPurchase(\'' + o.id + '\')">详情</button></td></tr>';
@@ -1037,9 +1040,12 @@
   };
   window.App.openPurchase = function (id) {
     var o = DB.get('purchases', id); if (!o) return;
+    var isVoid = o.voided === true;
     var items = o.items.map(function (it) { return '<tr><td>' + esc(it.name) + '</td><td>' + esc(it.unit) + '</td><td class="mono">' + it.qty + '</td><td class="mono">' + money(it.price) + '</td><td class="mono">' + money(it.subtotal) + '</td></tr>'; }).join('');
     var debt = DB.round2(o.total - o.paid);
-    openModal('进货单 ' + o.no,
+    var voidBanner = isVoid ? '<div class="void-banner">⚠️ 此采购单已作废，库存已恢复</div>' : '';
+    openModal('进货单 ' + o.no + (isVoid ? '（已作废）' : ''),
+      voidBanner +
       '<div class="row between"><span class="muted">供应商：' + esc(o.supplierName || '其他供应商') + '</span><span>' + statusTag(DB.orderStatus(o), 'purchase') + '</span></div>' +
       '<table class="table mt12"><thead><tr><th>商品</th><th>单位</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>' + items + '</tbody></table>' +
       '<div class="settle-line"><span>进货总额</span><span class="v">' + money(o.total) + '</span></div>' +
@@ -1047,7 +1053,130 @@
       (debt > 0.005 ? '<div class="settle-line total"><span>未付</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' : '') +
       (o.remark ? '<div class="settle-line" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--c-border)"><span style="vertical-align:top">备注</span><span class="v" style="text-align:left;white-space:pre-wrap;max-width:70%">' + esc(o.remark) + '</span></div>' : ''),
       '<button class="btn" onclick="App.closeModal()">关闭</button>' +
-      (debt > 0.005 ? '<button class="btn btn--primary" onclick="App.payPurchase(\'' + o.id + '\')">💰 付款 ' + money(debt) + '</button>' : ''));
+      (isVoid ? '' :
+        '<button class="btn btn--warning" onclick="App.editPurchase(\'' + o.id + '\')">✏️ 修改</button>' +
+        '<button class="btn btn--danger" onclick="App.voidPurchase(\'' + o.id + '\')">🚫 作废</button>' +
+        '<button class="btn btn--danger" onclick="App.deletePurchase(\'' + o.id + '\')">🗑️ 删除</button>' +
+        (debt > 0.005 ? '<button class="btn btn--primary" onclick="App.payPurchase(\'' + o.id + '\')">💰 付款 ' + money(debt) + '</button>' : '')));
+  };
+  /** 删除采购单：恢复库存，删除财务流水，删除采购单 */
+  window.App.deletePurchase = function (id) {
+    var o = DB.get('purchases', id); if (!o) return;
+    if (!confirm('确定删除此采购单？删除后将恢复库存，且不可恢复。')) return;
+    // 恢复库存
+    o.items.forEach(function (it) {
+      var prod = DB.get('products', it.productId);
+      if (prod) prod.stock = Math.max(0, (prod.stock || 0) + it.qty);
+    });
+    // 删除相关财务流水
+    var finance = DB.all('finance');
+    for (var i = finance.length - 1; i >= 0; i--) {
+      if (finance[i].remark && finance[i].remark.indexOf('采购付款 ' + o.no) >= 0) {
+        finance.splice(i, 1);
+      }
+    }
+    // 删除相关库存流水
+    var stockLogs = DB.all('stockLogs');
+    for (var j = stockLogs.length - 1; j >= 0; j--) {
+      if (stockLogs[j].remark && stockLogs[j].remark.indexOf('采购入库 ' + o.no) >= 0) {
+        stockLogs.splice(j, 1);
+      }
+    }
+    // 删除采购单
+    var purchases = DB.all('purchases');
+    for (var k = purchases.length - 1; k >= 0; k--) {
+      if (purchases[k].id === id) { purchases.splice(k, 1); break; }
+    }
+    DB.persist && DB.persist();
+    closeModal(); toast('采购单已删除', 'ok'); route();
+  };
+  /** 作废采购单：标记为作废，恢复库存，保留记录 */
+  window.App.voidPurchase = function (id) {
+    var o = DB.get('purchases', id); if (!o) return;
+    if (o.voided) { toast('此采购单已作废', 'err'); return; }
+    if (!confirm('确定作废此采购单？作废后将恢复库存，记录保留但显示为作废状态。')) return;
+    // 恢复库存
+    o.items.forEach(function (it) {
+      var prod = DB.get('products', it.productId);
+      if (prod) prod.stock = Math.max(0, (prod.stock || 0) + it.qty);
+    });
+    // 删除相关财务流水
+    var finance = DB.all('finance');
+    for (var i = finance.length - 1; i >= 0; i--) {
+      if (finance[i].remark && finance[i].remark.indexOf('采购付款 ' + o.no) >= 0) {
+        finance.splice(i, 1);
+      }
+    }
+    // 标记为作废，已付金额清零
+    o.voided = true;
+    o.paid = 0;
+    o.voidedAt = new Date().toISOString();
+    DB.persist && DB.persist();
+    closeModal(); toast('采购单已作废', 'ok'); route();
+  };
+  /** 修改采购单：打开进货单编辑弹窗，预填数据 */
+  window.App.editPurchase = function (id) {
+    var o = DB.get('purchases', id); if (!o) return;
+    if (o.voided) { toast('已作废的采购单不能修改', 'err'); return; }
+    closeModal();
+    // 打开进货单弹窗，预填数据
+    var sups = activeParties('suppliers');
+    var supOpts = '<option value="">选择供应商</option>' + sups.map(function (s) { return '<option value="' + s.id + '"' + (s.id === o.supplierId ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('');
+    uiState.pu = { items: o.items.map(function (it) { return { productId: it.productId, name: it.name, qty: it.qty, price: it.price }; }), discount: o.discount || 0, no: o.no, suggestLimit: 20, remark: o.remark || '', editId: id };
+    var body =
+      '<div class="pu-form">' +
+      '<div class="pu-form__head">' +
+        '<div class="pu-form__title"><button class="btn btn--sm pu-back" onclick="App.closeModal()">‹</button><span>修改进货单 ' + o.no + '</span></div>' +
+        '<div class="pu-form__meta">' +
+          '<div><label>单号</label><span id="puNo">' + o.no + '</span></div>' +
+          '<div><label>供应商</label><select id="puSup">' + supOpts + '</select></div>' +
+          '<div><label>日期</label><input id="puDate" type="date" value="' + o.date + '"/></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pu-form__search" style="position:relative">' +
+        '<div class="search"><span>🔍</span><input id="puKw" placeholder="输入产品名称/型号，从下拉选择或回车添加" autocomplete="off"/></div>' +
+        '<button class="btn btn--primary pu-add" id="puAddBtn">添加</button>' +
+        '<div id="puSuggest" class="pu-suggest"></div>' +
+      '</div>' +
+      '<div class="pu-form__items"><table class="table"><thead><tr>' +
+        '<th>产品</th><th>规格</th><th>单价(¥)</th><th>数量</th><th>小计(¥)</th><th class="right">操作</th>' +
+      '</tr></thead><tbody id="puItems"></tbody></table>' +
+      '<div id="puEmpty" class="empty" style="padding:24px;text-align:center">尚未添加商品，在上方搜索后点击添加</div></div>' +
+      '<div class="pu-form__remark" style="padding:8px 16px;border-top:1px solid var(--c-border)">' +
+      '<label style="font-size:13px;color:var(--c-muted);display:block;margin-bottom:4px">备注</label>' +
+      '<textarea id="puRemark" rows="2" placeholder="可填写进货备注信息，如物流、质检、特殊要求等" style="width:100%;resize:vertical;border:1px solid var(--c-border);border-radius:var(--r-sm);padding:8px;font-size:13px">' + esc(o.remark || '') + '</textarea>' +
+      '</div>' +
+      '<div class="pu-form__foot">' +
+        '<span>件数 <b id="puCount">0</b></span>' +
+        '<span>合计 <b id="puTotal">' + money(0) + '</b></span>' +
+        '<span class="pu-discount">优惠 <input id="puDiscount" type="number" min="0" step="0.01" value="' + (o.discount || 0) + '" style="width:70px"/> 元</span>' +
+        '<span>实付 <b id="puPayable">' + money(0) + '</b></span>' +
+        '<button class="btn btn--primary pu-settle" onclick="App.savePurchase()">保存修改</button>' +
+      '</div>' +
+      '</div>';
+    openModal('', body, '', 'purchase-modal');
+    document.getElementById('modalTitle').style.display = 'none';
+    // 事件绑定
+    var kw = $('#puKw');
+    var suggest = $('#puSuggest');
+    kw.addEventListener('input', function () { updatePuSuggest(); });
+    kw.addEventListener('focus', function () { updatePuSuggest(); });
+    kw.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); hidePuSuggest(); addPuItemByKw(); }
+      if (e.key === 'Escape') { hidePuSuggest(); }
+    });
+    $('#puAddBtn').addEventListener('click', function () { hidePuSuggest(); addPuItemByKw(); });
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.pu-form__search')) hidePuSuggest();
+    });
+    $('#puDiscount').addEventListener('input', function (e) {
+      uiState.pu.discount = parseFloat(e.target.value) || 0;
+      updatePuFoot();
+    });
+    $('#puRemark').addEventListener('input', function (e) {
+      uiState.pu.remark = e.target.value;
+    });
+    renderPuItems();
   };
   /** 进货单付款：只冲抵本单，超额自动截断（复用 receiveOnOrder，MNR-02） */
   window.App.payPurchase = function (id) {
@@ -1264,12 +1393,61 @@
     var total = items.reduce(function (a, it) { return a + (it.price || 0) * (it.qty || 0); }, 0);
     var discount = uiState.pu.discount || 0;
     var payable = Math.max(0, DB.round2(total - discount));
-    DB.recordPurchase({
-      supplierId: sid, supplierName: sup.name, items: items,
-      paid: payable, method: '银行', no: uiState.pu.no, date: $('#puDate').value || today(),
-      remark: uiState.pu.remark || ''
-    });
-    closeModal(); toast('进货入库成功', 'ok'); route();
+    var editId = uiState.pu.editId;
+    if (editId) {
+      // 编辑模式：更新现有采购单
+      var oldOrder = DB.get('purchases', editId);
+      if (oldOrder) {
+        // 恢复旧库存
+        oldOrder.items.forEach(function (it) {
+          var prod = DB.get('products', it.productId);
+          if (prod) prod.stock = Math.max(0, (prod.stock || 0) + it.qty);
+        });
+        // 删除旧财务流水
+        var finance = DB.all('finance');
+        for (var fi = finance.length - 1; fi >= 0; fi--) {
+          if (finance[fi].remark && finance[fi].remark.indexOf('采购付款 ' + oldOrder.no) >= 0) {
+            finance.splice(fi, 1);
+          }
+        }
+        // 删除旧库存流水
+        var stockLogs = DB.all('stockLogs');
+        for (var si = stockLogs.length - 1; si >= 0; si--) {
+          if (stockLogs[si].remark && stockLogs[si].remark.indexOf('采购入库 ' + oldOrder.no) >= 0) {
+            stockLogs.splice(si, 1);
+          }
+        }
+        // 更新采购单
+        oldOrder.supplierId = sid;
+        oldOrder.supplierName = sup.name;
+        oldOrder.items = items.map(function (it) {
+          var prod = DB.get('products', it.productId);
+          return { productId: prod.id, name: prod.name, unit: prod.unit, qty: it.qty, price: it.price, subtotal: DB.round2(it.qty * it.price) };
+        });
+        oldOrder.discount = discount;
+        oldOrder.total = total;
+        oldOrder.paid = payable;
+        oldOrder.date = $('#puDate').value || today();
+        oldOrder.remark = uiState.pu.remark || '';
+        oldOrder.ts = Date.now();
+        // 扣减新库存
+        oldOrder.items.forEach(function (it) {
+          var prod = DB.get('products', it.productId);
+          if (prod) prod.stock = Math.max(0, (prod.stock || 0) - it.qty);
+          DB.all('stockLogs').push({ id: Date.now() + Math.random(), date: today(), type: 'in', productId: it.productId, productName: it.name, qty: it.qty, remark: '采购入库 ' + oldOrder.no });
+        });
+        if (payable > 0) DB.all('finance').push({ id: Date.now() + Math.random(), date: today(), type: 'pay', party: oldOrder.supplierName, amount: payable, remark: '采购付款 ' + oldOrder.no });
+        DB.persist && DB.persist();
+      }
+      closeModal(); toast('采购单修改成功', 'ok'); route();
+    } else {
+      DB.recordPurchase({
+        supplierId: sid, supplierName: sup.name, items: items,
+        paid: payable, method: '银行', no: uiState.pu.no, date: $('#puDate').value || today(),
+        remark: uiState.pu.remark || ''
+      });
+      closeModal(); toast('进货入库成功', 'ok'); route();
+    }
   };
 
   /* ---------- 客户 / 供应商档案（GAP-02） ----------

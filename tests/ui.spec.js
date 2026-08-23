@@ -1081,6 +1081,78 @@ async function run() {
   check('进货单备注功能全程无JS错误', i3b.errors.length + i3b2.errors.length === 0,
     [i3b.errors, i3b2.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
+  section('I3c 采购单详情修改/删除/作废功能');
+  var i3c = boot({ hash: '#purchase' });
+  // 创建一个测试采购单
+  i3c.App.openPurchaseForm();
+  i3c.$('#puKw').value = '海尔';
+  i3c.click(i3c.$('#puAddBtn'));
+  i3c.$('#puSup').value = i3c.DB.all('suppliers')[0].id;
+  var beforeP = i3c.DB.all('purchases').length;
+  i3c.App.savePurchase();
+  check('创建测试采购单成功', i3c.DB.all('purchases').length === beforeP + 1);
+  var testPurchase = i3c.DB.all('purchases')[i3c.DB.all('purchases').length - 1];
+  // 从采购单中获取实际商品ID和数量，计算创建前库存
+  var testProdId = testPurchase.items[0].productId;
+  var purchaseQty = testPurchase.items[0].qty;
+  var afterCreateStock = i3c.DB.get('products', testProdId).stock;
+  var beforeStock = afterCreateStock + purchaseQty; // 创建前的库存
+  // 详情弹窗有修改、删除、作废按钮
+  i3c.App.openPurchase(testPurchase.id);
+  check('详情弹窗有修改按钮', !!i3c.$('button[onclick="App.editPurchase(\'' + testPurchase.id + '\')"]'));
+  check('详情弹窗有删除按钮', !!i3c.$('button[onclick="App.deletePurchase(\'' + testPurchase.id + '\')"]'));
+  check('详情弹窗有作废按钮', !!i3c.$('button[onclick="App.voidPurchase(\'' + testPurchase.id + '\')"]'));
+  i3c.App.closeModal();
+  // 测试作废功能
+  i3c.App.voidPurchase(testPurchase.id);
+  var voidedPurchase = i3c.DB.get('purchases', testPurchase.id);
+  check('作废后采购单标记为voided', voidedPurchase.voided === true);
+  check('作废后库存恢复', i3c.DB.get('products', testProdId).stock === beforeStock, i3c.DB.get('products', testProdId).stock + ' vs ' + beforeStock);
+  // 列表显示作废标签
+  var voidRow = i3c.$('.purchase-row--voided');
+  check('列表显示作废红色行', !!voidRow);
+  check('列表显示作废标签', /已作废/.test(i3c.$('#view').textContent));
+  // 已作废的采购单详情不显示操作按钮
+  i3c.App.openPurchase(testPurchase.id);
+  check('已作废采购单详情不显示修改按钮', !i3c.$('button[onclick="App.editPurchase(\'' + testPurchase.id + '\')"]'));
+  check('已作废采购单详情显示作废横幅', !!i3c.$('.void-banner'));
+  i3c.App.closeModal();
+  // 测试删除功能
+  var i3c2 = boot({ hash: '#purchase' });
+  i3c2.App.openPurchaseForm();
+  i3c2.$('#puKw').value = '海尔';
+  i3c2.click(i3c2.$('#puAddBtn'));
+  i3c2.$('#puSup').value = i3c2.DB.all('suppliers')[0].id;
+  var beforeD = i3c2.DB.all('purchases').length;
+  i3c2.App.savePurchase();
+  var delPurchase = i3c2.DB.all('purchases')[i3c2.DB.all('purchases').length - 1];
+  var delProdId = delPurchase.items[0].productId;
+  var delQty = delPurchase.items[0].qty;
+  var afterCreateStockD = i3c2.DB.get('products', delProdId).stock;
+  var beforeStockD = afterCreateStockD + delQty; // 创建前的库存
+  i3c2.App.deletePurchase(delPurchase.id);
+  check('删除后采购单数量减少', i3c2.DB.all('purchases').length === beforeD);
+  check('删除后库存恢复', i3c2.DB.get('products', delProdId).stock === beforeStockD, i3c2.DB.get('products', delProdId).stock + ' vs ' + beforeStockD);
+  // 测试修改功能
+  var i3c3 = boot({ hash: '#purchase' });
+  i3c3.App.openPurchaseForm();
+  i3c3.$('#puKw').value = '海尔';
+  i3c3.click(i3c3.$('#puAddBtn'));
+  i3c3.$('#puSup').value = i3c3.DB.all('suppliers')[0].id;
+  i3c3.App.savePurchase();
+  var editPurchase = i3c3.DB.all('purchases')[i3c3.DB.all('purchases').length - 1];
+  i3c3.App.editPurchase(editPurchase.id);
+  check('修改弹窗打开，显示修改进货单标题', /修改进货单/.test(i3c3.$('#modalBody').textContent));
+  check('修改弹窗预填备注', i3c3.$('#puRemark') && i3c3.$('#puRemark').value === (editPurchase.remark || ''));
+  // 修改备注并保存
+  i3c3.$('#puRemark').value = '修改后的备注';
+  i3c3.fire(i3c3.$('#puRemark'), 'input');
+  i3c3.App.savePurchase();
+  var updatedPurchase = i3c3.DB.get('purchases', editPurchase.id);
+  check('修改后备注更新', updatedPurchase.remark === '修改后的备注', updatedPurchase.remark);
+  check('采购单修改/删除/作废功能全程无JS错误', i3c.errors.length + i3c2.errors.length + i3c3.errors.length === 0,
+    [i3c.errors, i3c2.errors, i3c3.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
   section('I4 设置页 GitHub Pages 数据同步');
   var i4 = boot({ hash: '#settings' });
   check('设置页有 GitHub 同步入口', /同步到 GitHub|GitHub Pages|更新到 GitHub/.test(i4.$('#view').textContent));
