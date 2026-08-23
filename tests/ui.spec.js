@@ -930,6 +930,27 @@ async function run() {
   check('销售开单备注功能全程无JS错误', i2b.errors.length + i2b2.errors.length === 0,
     [i2b.errors, i2b2.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
+  section('I2c 销售开单实收金额改为可输入形式（无步进）');
+  var i2c = boot({ hash: '#pos' });
+  var card2c = i2c.$('#posGrid .prod-card');
+  if (card2c) i2c.click(card2c);
+  var paidInput = i2c.$('#posPaid');
+  check('实收金额输入框存在', !!paidInput);
+  check('实收金额输入框是text类型（无步进按钮）', paidInput && paidInput.type === 'text', paidInput && paidInput.type);
+  check('实收金额输入框有inputmode=decimal（数字键盘）', paidInput && paidInput.getAttribute('inputmode') === 'decimal', paidInput && paidInput.getAttribute('inputmode'));
+  // 输入金额后自动计算欠款
+  if (paidInput) {
+    var beforeDebt = i2c.$('#posCart').textContent.match(/欠款[^0-9]*([0-9.]+)/);
+    paidInput.value = '50';
+    i2c.fire(paidInput, 'input');
+    var afterText = i2c.$('#posCart').textContent;
+    check('输入金额后结算区域刷新', /欠款/.test(afterText));
+    // blur后格式化保留2位小数
+    i2c.fire(paidInput, 'blur');
+    check('blur后实收金额格式化为2位小数', paidInput.value === '50.00', paidInput.value);
+  }
+  check('实收金额可输入功能全程无JS错误', i2c.errors.length === 0, i2c.errors.join('|'));
+
   section('I3 新建进货单重新设计（搜索+添加+产品列表+结算）');
   var i3 = boot({ hash: '#purchase' });
   i3.App.openPurchaseForm();

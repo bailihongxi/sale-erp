@@ -825,7 +825,7 @@
       '<div class="settle-line"><span>小计</span><span class="v">' + money(subtotal) + '</span></div>' +
       '<div class="field" style="margin:8px 0"><label>优惠金额</label><input id="posDisc" type="number" value="' + discount + '"/></div>' +
       '<div class="settle-line"><span>应收合计</span><span class="v">' + money(total) + '</span></div>' +
-      '<div class="field" style="margin:8px 0"><label>实收金额</label><input id="posPaid" type="number" value="' + paid + '"/></div>' +
+      '<div class="field" style="margin:8px 0"><label>实收金额</label><input id="posPaid" type="text" inputmode="decimal" placeholder="请输入实收金额" value="' + paid + '"/></div>' +
       '<div class="field"><label>收款方式</label><select id="posMethod"><option ' + (pos.method === '现金' ? 'selected' : '') + '>现金</option><option ' + (pos.method === '微信' ? 'selected' : '') + '>微信</option><option ' + (pos.method === '支付宝' ? 'selected' : '') + '>支付宝</option><option ' + (pos.method === '银行' ? 'selected' : '') + '>银行</option><option ' + (pos.method === '欠款' ? 'selected' : '') + '>欠款</option></select></div>' +
       '<div class="field" style="margin:8px 0"><label>备注</label><textarea id="posRemark" rows="2" placeholder="可填写销售备注信息，如送货地址、特殊要求等" style="width:100%;resize:vertical">' + esc(pos.remark || '') + '</textarea></div>' +
       '<div class="settle-line"><span>欠款</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' +
@@ -843,6 +843,12 @@
     });
     $('#posDisc').addEventListener('input', function (e) { pos.discount = parseFloat(e.target.value) || 0; renderPosCart(); });
     $('#posPaid').addEventListener('input', function (e) { pos.paid = parseFloat(e.target.value) || 0; renderPosCart(); });
+    $('#posPaid').addEventListener('blur', function (e) {
+      var val = parseFloat(e.target.value) || 0;
+      pos.paid = val;
+      e.target.value = val.toFixed(2); // 输入完成后格式化保留2位小数
+      renderPosCart();
+    });
     $('#posMethod').addEventListener('change', function (e) { pos.method = e.target.value; });
     $('#posRemark').addEventListener('input', function (e) { pos.remark = e.target.value; });
     Array.prototype.forEach.call(c.querySelectorAll('.cart-item'), function (row) {
