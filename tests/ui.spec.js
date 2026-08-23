@@ -987,6 +987,66 @@ async function run() {
   check('欠款显示元素有id=posDebt', !!i2d.$('#posDebt'));
   check('结算单输入框修复全程无JS错误', i2d.errors.length === 0, i2d.errors.join('|'));
 
+  section('I2e 销售单详情修改/删除/作废功能');
+  var i2e = boot({ hash: '#pos' });
+  // 创建一个测试销售单
+  var card2e = i2e.$('#posGrid .prod-card');
+  if (card2e) i2e.click(card2e);
+  var beforeS = i2e.DB.all('sales').length;
+  var saleProdId = i2e.DB.all('products')[0].id;
+  var beforeStockSale = i2e.DB.get('products', saleProdId).stock;
+  i2e.App.settlePos();
+  check('创建测试销售单成功', i2e.DB.all('sales').length === beforeS + 1);
+  var testSale = i2e.DB.all('sales')[i2e.DB.all('sales').length - 1];
+  var saleQty = testSale.items[0].qty;
+  // 详情弹窗有修改、删除、作废按钮
+  i2e.App.openSale(testSale.id);
+  check('销售单详情有修改按钮', !!i2e.$('button[onclick="App.editSale(\'' + testSale.id + '\')"]'));
+  check('销售单详情有删除按钮', !!i2e.$('button[onclick="App.deleteSale(\'' + testSale.id + '\')"]'));
+  check('销售单详情有作废按钮', !!i2e.$('button[onclick="App.voidSale(\'' + testSale.id + '\')"]'));
+  i2e.App.closeModal();
+  // 测试作废功能
+  i2e.App.voidSale(testSale.id);
+  var voidedSale = i2e.DB.get('sales', testSale.id);
+  check('作废后销售单标记为voided', voidedSale.voided === true);
+  check('作废后库存恢复', i2e.DB.get('products', saleProdId).stock === beforeStockSale, i2e.DB.get('products', saleProdId).stock + ' vs ' + beforeStockSale);
+  // 已作废的销售单详情不显示操作按钮
+  i2e.App.openSale(testSale.id);
+  check('已作废销售单详情不显示修改按钮', !i2e.$('button[onclick="App.editSale(\'' + testSale.id + '\')"]'));
+  check('已作废销售单详情显示作废横幅', !!i2e.$('.void-banner'));
+  i2e.App.closeModal();
+  // 测试删除功能
+  var i2e2 = boot({ hash: '#pos' });
+  var card2e2 = i2e2.$('#posGrid .prod-card');
+  if (card2e2) i2e2.click(card2e2);
+  var beforeD2 = i2e2.DB.all('sales').length;
+  i2e2.App.settlePos();
+  var delSale = i2e2.DB.all('sales')[i2e2.DB.all('sales').length - 1];
+  var delSaleProdId = delSale.items[0].productId;
+  var delSaleQty = delSale.items[0].qty;
+  var afterCreateStockD = i2e2.DB.get('products', delSaleProdId).stock;
+  var beforeStockD = afterCreateStockD + delSaleQty;
+  i2e2.App.deleteSale(delSale.id);
+  check('删除后销售单数量减少', i2e2.DB.all('sales').length === beforeD2);
+  check('删除后库存恢复', i2e2.DB.get('products', delSaleProdId).stock === beforeStockD, i2e2.DB.get('products', delSaleProdId).stock + ' vs ' + beforeStockD);
+  // 测试修改功能
+  var i2e3 = boot({ hash: '#pos' });
+  var card2e3 = i2e3.$('#posGrid .prod-card');
+  if (card2e3) i2e3.click(card2e3);
+  i2e3.App.settlePos();
+  var editSale = i2e3.DB.all('sales')[i2e3.DB.all('sales').length - 1];
+  i2e3.App.editSale(editSale.id);
+  check('修改弹窗打开，有应收合计输入框', !!i2e3.$('#editSaleTotal'));
+  check('修改弹窗有已收金额输入框', !!i2e3.$('#editSalePaid'));
+  check('修改弹窗预填备注', i2e3.$('#editSaleRemark') && i2e3.$('#editSaleRemark').value === (editSale.remark || ''));
+  // 修改备注并保存
+  i2e3.$('#editSaleRemark').value = '修改后的销售备注';
+  i2e3.App.saveEditSale(editSale.id);
+  var updatedSale = i2e3.DB.get('sales', editSale.id);
+  check('修改后备注更新', updatedSale.remark === '修改后的销售备注', updatedSale.remark);
+  check('销售单修改/删除/作废功能全程无JS错误', i2e.errors.length + i2e2.errors.length + i2e3.errors.length === 0,
+    [i2e.errors, i2e2.errors, i2e3.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
   section('I3 新建进货单重新设计（搜索+添加+产品列表+结算）');
   var i3 = boot({ hash: '#purchase' });
   i3.App.openPurchaseForm();

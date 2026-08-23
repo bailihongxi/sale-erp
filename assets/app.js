@@ -987,8 +987,11 @@
       return true;
     });
     body.innerHTML = list.map(function (o) {
-      return '<tr data-id="' + o.id + '" class="clk">' +
-        '<td>' + esc(o.no) + '</td><td>' + esc(o.date) + '</td><td>' + esc(o.customerName) + '</td>' +
+      var isVoid = o.voided === true;
+      var rowCls = isVoid ? 'sale-row--voided' : '';
+      var voidTag = isVoid ? '<span class="tag tag--danger tag--void">已作废</span>' : '';
+      return '<tr data-id="' + o.id + '" class="clk ' + rowCls + '">' +
+        '<td>' + esc(o.no) + ' ' + voidTag + '</td><td>' + esc(o.date) + '</td><td>' + esc(o.customerName) + '</td>' +
         '<td class="right mono">' + money(o.total) + '</td><td class="right mono">' + money(o.paid) + '</td>' +
         '<td>' + statusTag(DB.orderStatus(o)) + '</td>' +
         '<td class="right"><button class="btn btn--sm" onclick="App.openSale(\'' + o.id + '\')">详情</button></td></tr>';
@@ -1002,19 +1005,124 @@
   }
   window.App.openSale = function (id) {
     var o = DB.get('sales', id); if (!o) return;
+    var isVoid = o.voided === true;
     var items = o.items.map(function (it) {
       return '<tr><td>' + esc(it.name) + '</td><td>' + esc(it.unit) + '</td><td class="mono">' + it.qty + '</td><td class="mono">' + money(it.price) + '</td><td class="mono">' + money(it.subtotal) + '</td></tr>';
     }).join('');
     var debt = o.total - o.paid;
+    var voidBanner = isVoid ? '<div class="void-banner">⚠️ 此销售单已作废，库存已恢复</div>' : '';
     var foot = '<button class="btn" onclick="App.closeModal()">关闭</button>' +
-      (debt > 0 ? '<button class="btn btn--primary" onclick="App.receiveSale(\'' + o.id + '\')">💰 收款 ' + money(debt) + '</button>' : '');
-    openModal('销售单 ' + o.no,
+      (isVoid ? '' :
+        '<button class="btn btn--warning" onclick="App.editSale(\'' + o.id + '\')">✏️ 修改</button>' +
+        '<button class="btn btn--danger" onclick="App.voidSale(\'' + o.id + '\')">🚫 作废</button>' +
+        '<button class="btn btn--danger" onclick="App.deleteSale(\'' + o.id + '\')">🗑️ 删除</button>' +
+        (debt > 0 ? '<button class="btn btn--primary" onclick="App.receiveSale(\'' + o.id + '\')">💰 收款 ' + money(debt) + '</button>' : ''));
+    openModal('销售单 ' + o.no + (isVoid ? '（已作废）' : ''),
+      voidBanner +
       '<div class="row between"><span class="muted">客户：' + esc(o.customerName) + '</span><span>' + statusTag(DB.orderStatus(o)) + '</span></div>' +
       '<table class="table mt12"><thead><tr><th>商品</th><th>单位</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>' + items + '</tbody></table>' +
       '<div class="settle-line"><span>应收合计</span><span class="v">' + money(o.total) + '</span></div>' +
       '<div class="settle-line"><span>已收</span><span class="v">' + money(o.paid) + '</span></div>' +
       '<div class="settle-line total"><span>欠款</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' +
       (o.remark ? '<div class="settle-line" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--c-border)"><span style="vertical-align:top">备注</span><span class="v" style="text-align:left;white-space:pre-wrap;max-width:70%">' + esc(o.remark) + '</span></div>' : ''), foot);
+  };
+  /** 删除销售单：恢复库存，删除财务流水，删除销售单 */
+  window.App.deleteSale = function (id) {
+    var o = DB.get('sales', id); if (!o) return;
+    if (!confirm('确定删除此销售单？删除后将恢复库存，且不可恢复。')) return;
+    // 恢复库存
+    o.items.forEach(function (it) {
+      var prod = DB.get('products', it.productId);
+      if (prod) prod.stock = (prod.stock || 0) + it.qty;
+    });
+    // 删除相关财务流水
+    var finance = DB.all('finance');
+    for (var i = finance.length - 1; i >= 0; i--) {
+      if (finance[i].remark && finance[i].remark.indexOf('销售收款 ' + o.no) >= 0) {
+        finance.splice(i, 1);
+      }
+    }
+    // 删除相关库存流水
+    var stockLogs = DB.all('stockLogs');
+    for (var j = stockLogs.length - 1; j >= 0; j--) {
+      if (stockLogs[j].remark && stockLogs[j].remark.indexOf('销售出库 ' + o.no) >= 0) {
+        stockLogs.splice(j, 1);
+      }
+    }
+    // 删除销售单
+    var sales = DB.all('sales');
+    for (var k = sales.length - 1; k >= 0; k--) {
+      if (sales[k].id === id) { sales.splice(k, 1); break; }
+    }
+    DB.persist && DB.persist();
+    closeModal(); toast('销售单已删除', 'ok'); route();
+  };
+  /** 作废销售单：标记为作废，恢复库存，保留记录 */
+  window.App.voidSale = function (id) {
+    var o = DB.get('sales', id); if (!o) return;
+    if (o.voided) { toast('此销售单已作废', 'err'); return; }
+    if (!confirm('确定作废此销售单？作废后将恢复库存，记录保留但显示为作废状态。')) return;
+    // 恢复库存
+    o.items.forEach(function (it) {
+      var prod = DB.get('products', it.productId);
+      if (prod) prod.stock = (prod.stock || 0) + it.qty;
+    });
+    // 删除相关财务流水
+    var finance = DB.all('finance');
+    for (var i = finance.length - 1; i >= 0; i--) {
+      if (finance[i].remark && finance[i].remark.indexOf('销售收款 ' + o.no) >= 0) {
+        finance.splice(i, 1);
+      }
+    }
+    // 标记为作废，已收金额清零
+    o.voided = true;
+    o.paid = 0;
+    o.voidedAt = new Date().toISOString();
+    DB.persist && DB.persist();
+    closeModal(); toast('销售单已作废', 'ok'); route();
+  };
+  /** 修改销售单：打开开单页面，预填数据（简化版，直接修改备注和金额） */
+  window.App.editSale = function (id) {
+    var o = DB.get('sales', id); if (!o) return;
+    if (o.voided) { toast('已作废的销售单不能修改', 'err'); return; }
+    closeModal();
+    // 打开修改弹窗
+    var items = o.items.map(function (it) {
+      return '<tr><td>' + esc(it.name) + '</td><td>' + esc(it.unit) + '</td><td class="mono">' + it.qty + '</td><td class="mono">' + money(it.price) + '</td><td class="mono">' + money(it.subtotal) + '</td></tr>';
+    }).join('');
+    openModal('修改销售单 ' + o.no,
+      '<div class="row between"><span class="muted">客户：' + esc(o.customerName) + '</span></div>' +
+      '<table class="table mt12"><thead><tr><th>商品</th><th>单位</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>' + items + '</tbody></table>' +
+      '<div class="field" style="margin:8px 0"><label>应收合计</label><input id="editSaleTotal" type="text" inputmode="decimal" value="' + o.total + '"/></div>' +
+      '<div class="field" style="margin:8px 0"><label>已收金额</label><input id="editSalePaid" type="text" inputmode="decimal" value="' + o.paid + '"/></div>' +
+      '<div class="field" style="margin:8px 0"><label>备注</label><textarea id="editSaleRemark" rows="2" style="width:100%;resize:vertical">' + esc(o.remark || '') + '</textarea></div>',
+      '<button class="btn" onclick="App.closeModal()">取消</button>' +
+      '<button class="btn btn--primary" onclick="App.saveEditSale(\'' + id + '\')">保存修改</button>');
+  };
+  /** 保存销售单修改 */
+  window.App.saveEditSale = function (id) {
+    var o = DB.get('sales', id); if (!o) return;
+    var total = parseFloat($('#editSaleTotal').value) || 0;
+    var paid = parseFloat($('#editSalePaid').value) || 0;
+    var remark = $('#editSaleRemark').value || '';
+    if (total < 0) { toast('应收合计不能为负数', 'err'); return; }
+    if (paid < 0) { toast('已收金额不能为负数', 'err'); return; }
+    // 如果已收金额变化，调整财务流水
+    var finance = DB.all('finance');
+    for (var i = finance.length - 1; i >= 0; i--) {
+      if (finance[i].remark && finance[i].remark.indexOf('销售收款 ' + o.no) >= 0) {
+        finance.splice(i, 1);
+      }
+    }
+    if (paid > 0) {
+      finance.push({ id: Date.now() + Math.random(), date: today(), type: 'receive', party: o.customerName, amount: paid, remark: '销售收款 ' + o.no });
+    }
+    o.total = total;
+    o.paid = paid;
+    o.remark = remark;
+    o.ts = Date.now();
+    DB.persist && DB.persist();
+    closeModal(); toast('销售单修改成功', 'ok'); route();
   };
   window.App.receiveSale = function (id) {
     var o = DB.get('sales', id); if (!o) return;
