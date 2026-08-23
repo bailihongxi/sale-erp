@@ -1576,15 +1576,15 @@
         '<button class="btn btn--danger" onclick="App.resetBlankConfirm()">🗑️ 清空为空白账本</button>' +
         '<button class="btn" onclick="App.resetDemoConfirm()">↺ 恢复示例数据</button>' +
         '</div>') +
-      card('GitHub Pages 数据同步',
-        '<p class="muted">将本机数据以 base64 写入 GitHub 仓库文件，供网页版读取或下次构建后作为默认数据。需具有 repo 权限的 Personal Access Token。</p>' +
-        '<div class="field"><label>GitHub Token</label><input id="ghToken" type="password" placeholder="ghp_..."/></div>' +
+      (isLocalVersion() ? card('GitHub Pages 数据同步',
+        '<p class="muted">将本机数据以 base64 写入 GitHub 仓库文件，供网页版读取或下次构建后作为默认数据。需具有 repo 权限的 Personal Access Token。Token 会自动保存到本地，无需每次重新输入。</p>' +
+        '<div class="field"><label>GitHub Token</label><input id="ghToken" type="password" value="' + esc(s.ghToken || '') + '" placeholder="ghp_...（已保存，无需每次重新输入）"/></div>' +
         '<div class="grid grid--2">' +
         '<div class="field"><label>仓库（owner/repo）</label><input id="ghRepo" value="' + esc(s.ghRepo || '') + '" placeholder="如 bailihongxi/sale-erp"/></div>' +
         '<div class="field"><label>分支</label><input id="ghBranch" value="' + esc(s.ghBranch || 'main') + '"/></div>' +
         '</div>' +
         '<div class="field"><label>文件路径</label><input id="ghPath" value="' + esc(s.ghPath || 'data/state.json') + '"/></div>' +
-        '<button class="btn btn--primary mt12" onclick="App.syncToGitHub()">🚀 导出并更新到 GitHub</button>') +
+        '<button class="btn btn--primary mt12" onclick="App.syncToGitHub()">🚀 导出并更新到 GitHub</button>') : '') +
       '</div>';
   };
   window.App.saveSettings = function () {
@@ -1593,6 +1593,12 @@
     document.getElementById('shopName').textContent = DB.settings().shopName;
     toast('设置已保存', 'ok');
   };
+  /** 判断是否为本地版本（localhost / 127.0.0.1 / file:// / 测试环境），在线版本（GitHub Pages）隐藏同步功能 */
+  function isLocalVersion() {
+    var host = location.hostname || '';
+    var proto = location.protocol || '';
+    return proto === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '' || host.indexOf('local') >= 0;
+  }
   /** base64 编码（支持中文） */
   function b64u(s) { return btoa(unescape(encodeURIComponent(s))); }
   /** 导出用于同步到 GitHub 的数据（移除 ghToken 等敏感字段，使用紧凑格式减小体积） */
@@ -1833,6 +1839,7 @@
         '<button class="btn" onclick="App.importData()">⬆️ 导入备份</button>' +
         '<input type="file" id="importFile" accept=".json" style="display:none" onchange="App.doImport(this)"/>' +
         '</div>' +
+        (isLocalVersion() ?
         '<div class="sync-box mt12">' +
         '<div class="sync-box__title">🚀 一键同步到在线版本</div>' +
         '<p class="muted sync-box__desc">将本地数据提交到 GitHub 仓库，在线网页版和手机版打开时自动检测并提示导入更新，无需手动导出导入。</p>' +
@@ -1842,7 +1849,8 @@
         '<button class="btn btn--sm" onclick="location.hash=\'#settings\'">⚙️ 配置GitHub</button>' +
         '</div>' +
         '<div id="syncStatus" class="muted mt8" style="font-size:12px"></div>' +
-        '</div>') +
+        '</div>' : '')
+        ) +
       card('存储信息',
         '<div class="settle-line"><span>店铺</span><span class="v">' + esc(s.shopName) + '</span></div>' +
         '<div class="settle-line total"><span>数据量</span><span class="v" style="font-size:13px">' + counts + '</span></div>' +
@@ -1898,6 +1906,7 @@
   window.App.openSheet = openSheet;
   window.App.closeSheet = closeSheet;
   window.App.routeSync = route;   // 测试钩子：同步触发渲染（jsdom 的 hashchange 是异步的）
+  window.App.isLocalVersion = isLocalVersion; // 测试钩子：判断是否本地版本
   window.App.POS_PAGE_SIZE = POS_PAGE_SIZE; // 测试钩子：开单每页渲染上限
 
   // 绑定底部「我的」菜单

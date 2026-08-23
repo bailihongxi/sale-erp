@@ -1084,6 +1084,29 @@ async function run() {
   check('数据管理页同步功能全程无JS错误', i4c.errors.length + i4d.errors.length === 0,
     [i4c.errors, i4d.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
+  section('I4c 同步功能仅本地版本显示，在线版本隐藏');
+  // 本地版本（local.test，测试环境默认URL）显示同步模块
+  var i4e = boot({ hash: '#data' });
+  check('本地版本(local.test)显示同步按钮', !!i4e.$('button[onclick="App.pushDataToOnline()"]'));
+  check('本地版本显示同步状态区', !!i4e.$('#syncStatus'));
+  check('isLocalVersion对local.test返回true', i4e.App.isLocalVersion() === true);
+  // 在线版本（github.io）隐藏同步模块
+  var i4f = boot({ hash: '#data', url: 'https://bailihongxi.github.io/sale-erp/' });
+  check('在线版本(github.io)隐藏同步按钮', !i4f.$('button[onclick="App.pushDataToOnline()"]'));
+  check('在线版本隐藏同步状态区', !i4f.$('#syncStatus'));
+  check('isLocalVersion对github.io返回false', i4f.App.isLocalVersion() === false);
+  // 设置页Token回显
+  var i4h = boot({ hash: '#settings' });
+  i4h.DB.saveSettings({ ghToken: 'saved-token-abc', ghRepo: 'owner/repo' });
+  i4h.App.routeSync(); // 重新渲染设置页
+  check('设置页Token输入框回显已保存的token', i4h.$('#ghToken').value === 'saved-token-abc', i4h.$('#ghToken').value);
+  check('在线版本设置页隐藏GitHub同步卡片', (function () {
+    var i4hOnline = boot({ hash: '#settings', url: 'https://bailihongxi.github.io/sale-erp/' });
+    return !i4hOnline.$('#ghToken');
+  })());
+  check('本地/在线版本区分全程无JS错误', i4e.errors.length + i4f.errors.length + i4h.errors.length === 0,
+    [i4e.errors, i4f.errors, i4h.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
   section('I5 手机端商品页卡片布局（两行显示）');
   var i5 = boot({ hash: '#products' });
   check('商品页保留桌面表格', !!i5.$('#prodBody') && i5.$$('#prodBody tr').length > 0);
