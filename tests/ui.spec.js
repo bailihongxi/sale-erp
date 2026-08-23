@@ -1130,6 +1130,58 @@ async function run() {
   check('在线版本自动同步全程无JS错误', i4i.errors.length + i4j.errors.length === 0,
     [i4i.errors, i4j.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
+  section('I4e 在线版本手动从云端同步 + 增量更新');
+  // 在线版本数据管理页显示手动同步按钮
+  var i4k = boot({ url: 'https://bailihongxi.github.io/sale-erp/#data' });
+  check('在线版本数据管理页显示手动同步按钮', !!i4k.$('button[onclick="App.manualPullFromOnline()"]'));
+  check('在线版本显示手动同步状态区', !!i4k.$('#manualSyncStatus'));
+  // 本地版本不显示手动同步按钮
+  var i4l = boot({ hash: '#data' }); // 默认local.test，本地版本
+  check('本地版本数据管理页不显示手动同步按钮', !i4l.$('button[onclick="App.manualPullFromOnline()"]'));
+  // manualPullFromOnline函数存在
+  check('manualPullFromOnline函数存在', typeof i4k.App.manualPullFromOnline === 'function');
+  // 手动同步会调用fetch拉取远程数据
+  var i4kFetchCalls = [];
+  i4k.window.fetch = function (url, opts) {
+    i4kFetchCalls.push({ url: url, method: (opts && opts.method) || 'GET' });
+    return Promise.resolve({
+      ok: true, status: 200,
+      text: function () { return Promise.resolve(JSON.stringify({
+        products: [{ id: 'p1', name: '测试商品', brand: '测试', priceWholesale: 100, priceRetail: 150, stock: 10, unit: '个' }],
+        customers: [], suppliers: [], sales: [], purchases: [], stockLogs: [], finance: [],
+        settings: { shopName: '云端店铺', lowStock: 5 },
+        __meta: { exportedAt: '2026-08-23T00:00:00.000Z' }
+      })); }
+    });
+  };
+  i4k.App.manualPullFromOnline();
+  check('手动同步调用fetch拉取远程数据', i4kFetchCalls.length >= 1, i4kFetchCalls.length + ' calls');
+  check('手动同步拉取URL使用raw.githubusercontent.com', i4kFetchCalls.length > 0 && /raw\.githubusercontent\.com/.test(i4kFetchCalls[0].url));
+  // 等待异步同步完成
+  await new Promise(function (r) { setTimeout(r, 100); });
+  // 增量同步：验证数据被加载
+  var i4kProdCount = i4k.DB.all('products').length;
+  check('手动同步后商品数据被加载', i4kProdCount >= 1, i4kProdCount + ' products');
+  check('手动同步后店铺名称更新', i4k.DB.settings().shopName === '云端店铺', i4k.DB.settings().shopName);
+  // 增量同步：第二次同步相同数据，不应有更新（未变记录不重复写入）
+  var i4kFetchCalls2 = [];
+  i4k.window.fetch = function (url, opts) {
+    i4kFetchCalls2.push({ url: url });
+    return Promise.resolve({
+      ok: true, status: 200,
+      text: function () { return Promise.resolve(JSON.stringify({
+        products: [{ id: 'p1', name: '测试商品', brand: '测试', priceWholesale: 100, priceRetail: 150, stock: 10, unit: '个' }],
+        customers: [], suppliers: [], sales: [], purchases: [], stockLogs: [], finance: [],
+        settings: { shopName: '云端店铺', lowStock: 5 }
+      })); }
+    });
+  };
+  i4k.App.manualPullFromOnline();
+  await new Promise(function (r) { setTimeout(r, 100); });
+  check('第二次同步相同数据不报错', i4k.errors.length === 0, i4k.errors.join('|'));
+  check('手动同步全程无JS错误', i4k.errors.length + i4l.errors.length === 0,
+    [i4k.errors, i4l.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
   section('I5 手机端商品页卡片布局（两行显示）');
   var i5 = boot({ hash: '#products' });
   check('商品页保留桌面表格', !!i5.$('#prodBody') && i5.$$('#prodBody tr').length > 0);

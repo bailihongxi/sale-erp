@@ -1900,6 +1900,15 @@
         '<div id="syncStatus" class="muted mt8" style="font-size:12px"></div>' +
         '</div>' : '')
         ) +
+      (!isLocalVersion() ?
+      '<div class="sync-box mt12" style="background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)">' +
+      '<div class="sync-box__title">☁️ 云端数据同步</div>' +
+      '<p class="muted sync-box__desc">从 GitHub 云端拉取最新数据并加载到当前设备。自动同步失败时可手动点击加载，支持增量更新只同步变更节点。</p>' +
+      '<div class="row wrap" style="gap:8px">' +
+      '<button class="btn btn--primary" onclick="App.manualPullFromOnline()">🔄 手动从云端同步</button>' +
+      '</div>' +
+      '<div id="manualSyncStatus" class="muted mt8" style="font-size:12px"></div>' +
+      '</div>' : '') +
       card('存储信息',
         '<div class="settle-line"><span>店铺</span><span class="v">' + esc(s.shopName) + '</span></div>' +
         '<div class="settle-line total"><span>数据量</span><span class="v" style="font-size:13px">' + counts + '</span></div>' +
@@ -1957,6 +1966,79 @@
   window.App.routeSync = route;   // 测试钩子：同步触发渲染（jsdom 的 hashchange 是异步的）
   window.App.isLocalVersion = isLocalVersion; // 测试钩子：判断是否本地版本
   window.App.autoPullFromOnline = autoPullFromOnline; // 测试钩子：在线版本自动同步
+  /** 手动从云端同步数据（在线版本使用），支持增量更新只同步变更节点 */
+  window.App.manualPullFromOnline = function () {
+    if (isLocalVersion()) { toast('本地版本无需手动同步', 'err'); return; }
+    var statusEl = $('#manualSyncStatus');
+    if (statusEl) statusEl.textContent = '⏳ 正在从云端拉取最新数据...';
+    // 从 GitHub Pages URL 推断 owner/repo
+    var host = location.hostname || '';
+    var path = location.pathname || '/';
+    var ownerMatch = host.match(/^([^.]+)\.github\.io$/);
+    if (!ownerMatch) { if (statusEl) statusEl.textContent = '❌ 无法识别仓库地址'; toast('同步失败', 'err'); return; }
+    var owner = ownerMatch[1];
+    var repo = path.replace(/^\//, '').replace(/\/.*$/, '') || 'sale-erp';
+    var rawUrl = 'https://raw.githubusercontent.com/' + owner + '/' + repo + '/main/data/state.json';
+    fetch(rawUrl, { method: 'GET', cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function (text) {
+        if (!text || text.trim() === '') throw new Error('云端暂无数据');
+        var remoteData;
+        try { remoteData = JSON.parse(text); } catch (e) { throw new Error('数据格式错误'); }
+        if (!remoteData || !Array.isArray(remoteData.products)) throw new Error('数据格式不正确');
+        // 增量同步：比较远程和本地，只更新变更节点
+        var collections = ['products', 'customers', 'suppliers', 'sales', 'purchases', 'stockLogs', 'finance'];
+        var stats = { added: 0, updated: 0, unchanged: 0, total: 0 };
+        collections.forEach(function (col) {
+          var remoteItems = remoteData[col] || [];
+          var localItems = DB.all(col);
+          var localMap = {};
+          localItems.forEach(function (item) { localMap[item.id] = item; });
+          remoteItems.forEach(function (rItem) {
+            stats.total++;
+            var lItem = localMap[rItem.id];
+            if (!lItem) {
+              // 新增
+              DB.insert(col, rItem);
+              stats.added++;
+            } else {
+              // 比较内容是否变化
+              var rJson = JSON.stringify(rItem);
+              var lJson = JSON.stringify(lItem);
+              if (rJson !== lJson) {
+                DB.update(col, rItem.id, rItem);
+                stats.updated++;
+              } else {
+                stats.unchanged++;
+              }
+            }
+          });
+        });
+        // 更新设置
+        if (remoteData.settings) {
+          DB.saveSettings({
+            shopName: remoteData.settings.shopName || DB.settings().shopName,
+            lowStock: remoteData.settings.lowStock || DB.settings().lowStock
+          });
+        }
+        // 刷新页面显示
+        var s = DB.settings();
+        document.getElementById('brandName').textContent = s.shopName;
+        document.getElementById('shopName').textContent = s.shopName;
+        var msg = '✅ 同步完成：共 ' + stats.total + ' 条，新增 ' + stats.added + ' 条，更新 ' + stats.updated + ' 条，未变 ' + stats.unchanged + ' 条（增量同步）';
+        if (statusEl) statusEl.textContent = msg;
+        toast('云端数据同步成功', 'ok');
+        route(); // 重新渲染当前页面
+      })
+      .catch(function (e) {
+        var err = '❌ 同步失败：' + (e && e.message || e);
+        if (statusEl) statusEl.textContent = err;
+        toast('同步失败', 'err');
+      });
+  };
   window.App.POS_PAGE_SIZE = POS_PAGE_SIZE; // 测试钩子：开单每页渲染上限
 
   // 绑定底部「我的」菜单
