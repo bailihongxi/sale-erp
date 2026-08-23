@@ -1595,6 +1595,14 @@
   };
   /** base64 编码（支持中文） */
   function b64u(s) { return btoa(unescape(encodeURIComponent(s))); }
+  /** 导出用于同步到 GitHub 的数据（移除 ghToken 等敏感字段，避免被 GitHub 密钥扫描拦截） */
+  function exportDataForSync() {
+    var data = JSON.parse(DB.exportData());
+    if (data.settings) {
+      delete data.settings.ghToken;
+    }
+    return JSON.stringify(data, null, 2);
+  }
   window.App.syncToGitHub = function () {
     var token = $('#ghToken').value.trim();
     var repo = $('#ghRepo').value.trim();
@@ -1606,7 +1614,7 @@
     DB.saveSettings({ ghRepo: repo, ghBranch: branch, ghPath: path, ghToken: token });
     var api = 'https://api.github.com/repos/' + repo + '/contents/' + encodeURIComponent(path);
     var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
-    var content = b64u(DB.exportData());
+    var content = b64u(exportDataForSync());
     fetch(api + '?ref=' + encodeURIComponent(branch), { method: 'GET', headers: headers })
       .then(function (r) { return r.json(); })
       .then(function (data) { return doPush(data && data.sha); })
@@ -1644,7 +1652,7 @@
     if (statusEl) statusEl.textContent = '⏳ 正在同步数据到 GitHub...';
     var api = 'https://api.github.com/repos/' + repo + '/contents/' + encodeURIComponent(path);
     var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
-    var content = b64u(DB.exportData());
+    var content = b64u(exportDataForSync());
     fetch(api + '?ref=' + encodeURIComponent(branch), { method: 'GET', headers: headers })
       .then(function (r) { return r.json(); })
       .then(function (data) { return doPush(data && data.sha); })

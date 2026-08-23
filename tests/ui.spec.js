@@ -1052,6 +1052,27 @@ async function run() {
   i4d.$('#ghPath').value = 'data/state.json';
   i4d.App.syncToGitHub();
   check('syncToGitHub保存token到设置', i4d.DB.settings().ghToken === 'saved-token-123');
+  // 同步导出数据不含ghToken（避免GitHub密钥扫描拦截）
+  i4d.DB.saveSettings({ ghToken: 'secret-token-xyz', ghRepo: 'owner/repo' });
+  var syncExport = i4d.window.exportDataForSync ? i4d.window.exportDataForSync() : null;
+  if (!syncExport) {
+    // exportDataForSync是内部函数，通过检查PUT请求体来验证
+    var i4dCalls = [];
+    var origFetch2 = global.fetch;
+    global.fetch = function (url, opts) {
+      i4dCalls.push({ url: url, method: (opts && opts.method) || 'GET', body: (opts && opts.body) || null });
+      return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ content: { html_url: 'ok' } }); } });
+    };
+    i4d.window.fetch = global.fetch;
+    i4d.App.pushDataToOnline();
+    global.fetch = origFetch2;
+    var putCall = i4dCalls.filter(function (c) { return c.method === 'PUT'; })[0];
+    if (putCall && putCall.body) {
+      var putBody = JSON.parse(putCall.body);
+      var decodedContent = decodeURIComponent(escape(atob(putBody.content.replace(/\n/g, ''))));
+      check('同步数据不含ghToken字段', !/ghToken/.test(decodedContent), decodedContent.slice(0, 200));
+    }
+  }
   check('数据管理页同步功能全程无JS错误', i4c.errors.length + i4d.errors.length === 0,
     [i4c.errors, i4d.errors].map(function (x) { return x.join('|'); }).join(' / '));
 
