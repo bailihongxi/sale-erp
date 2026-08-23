@@ -1766,7 +1766,7 @@
         '<div class="row wrap" style="gap:8px">' +
         '<button class="btn btn--primary" onclick="App.pushDataToOnline()">📤 提交同步数据</button>' +
         '<button class="btn btn--sm" onclick="App.pullDataFromOnline()">📥 检查在线更新</button>' +
-        '<button class="btn btn--sm" onclick="route(\'#settings\')">⚙️ 配置GitHub</button>' +
+        '<button class="btn btn--sm" onclick="location.hash=\'#settings\'">⚙️ 配置GitHub</button>' +
         '</div>' +
         '<div id="syncStatus" class="muted mt8" style="font-size:12px"></div>' +
         '</div>') +
