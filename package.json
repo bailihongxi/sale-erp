@@ -1,6 +1,6 @@
 {
   "name": "sale-erp",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "家电批发进销存 ERP — 纯前端 / 本地持久化 / 零构建。package.json 仅用于声明测试脚本，不引入任何构建步骤。",
   "scripts": {
