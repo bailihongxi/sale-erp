@@ -343,7 +343,8 @@
       id: uid(), no: no, date: date, ts: Date.now(),
       supplierId: p.supplierId || null,
       supplierName: (sup && sup.name) || p.supplierName || '',
-      items: items, discount: discount, total: total, paid: paid, method: p.method || '银行'
+      items: items, discount: discount, total: total, paid: paid, method: p.method || '银行',
+      remark: p.remark || ''
     };
     state.purchases.push(order);
     items.forEach(function (it) {

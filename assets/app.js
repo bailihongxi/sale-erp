@@ -1044,7 +1044,8 @@
       '<table class="table mt12"><thead><tr><th>商品</th><th>单位</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>' + items + '</tbody></table>' +
       '<div class="settle-line"><span>进货总额</span><span class="v">' + money(o.total) + '</span></div>' +
       '<div class="settle-line"><span>已付</span><span class="v">' + money(o.paid) + '</span></div>' +
-      (debt > 0.005 ? '<div class="settle-line total"><span>未付</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' : ''),
+      (debt > 0.005 ? '<div class="settle-line total"><span>未付</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' : '') +
+      (o.remark ? '<div class="settle-line" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--c-border)"><span style="vertical-align:top">备注</span><span class="v" style="text-align:left;white-space:pre-wrap;max-width:70%">' + esc(o.remark) + '</span></div>' : ''),
       '<button class="btn" onclick="App.closeModal()">关闭</button>' +
       (debt > 0.005 ? '<button class="btn btn--primary" onclick="App.payPurchase(\'' + o.id + '\')">💰 付款 ' + money(debt) + '</button>' : ''));
   };
@@ -1073,7 +1074,7 @@
     if (!sups.length) { toast('请先到「供应商」新增一个供应商', 'err'); return; }
     var supOpts = '<option value="">选择供应商</option>' + sups.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('');
     var no = 'PO-' + today().replace(/-/g, '') + '-' + String(DB.all('purchases').length + 1).padStart(3, '0');
-    uiState.pu = { items: [], discount: 0, no: no, suggestLimit: 20 };
+    uiState.pu = { items: [], discount: 0, no: no, suggestLimit: 20, remark: '' };
     var body =
       '<div class="pu-form">' +
       '<div class="pu-form__head">' +
@@ -1093,6 +1094,10 @@
         '<th>产品</th><th>规格</th><th>单价(¥)</th><th>数量</th><th>小计(¥)</th><th class="right">操作</th>' +
       '</tr></thead><tbody id="puItems"></tbody></table>' +
       '<div id="puEmpty" class="empty" style="padding:24px;text-align:center">尚未添加商品，在上方搜索后点击添加</div></div>' +
+      '<div class="pu-form__remark" style="padding:8px 16px;border-top:1px solid var(--c-border)">' +
+      '<label style="font-size:13px;color:var(--c-muted);display:block;margin-bottom:4px">备注</label>' +
+      '<textarea id="puRemark" rows="2" placeholder="可填写进货备注信息，如物流、质检、特殊要求等" style="width:100%;resize:vertical;border:1px solid var(--c-border);border-radius:var(--r-sm);padding:8px;font-size:13px"></textarea>' +
+      '</div>' +
       '<div class="pu-form__foot">' +
         '<span>件数 <b id="puCount">0</b></span>' +
         '<span>合计 <b id="puTotal">' + money(0) + '</b></span>' +
@@ -1121,6 +1126,9 @@
     $('#puDiscount').addEventListener('input', function (e) {
       uiState.pu.discount = parseFloat(e.target.value) || 0;
       updatePuFoot();
+    });
+    $('#puRemark').addEventListener('input', function (e) {
+      uiState.pu.remark = e.target.value;
     });
     renderPuItems();
   };
@@ -1258,7 +1266,8 @@
     var payable = Math.max(0, DB.round2(total - discount));
     DB.recordPurchase({
       supplierId: sid, supplierName: sup.name, items: items,
-      paid: payable, method: '银行', no: uiState.pu.no, date: $('#puDate').value || today()
+      paid: payable, method: '银行', no: uiState.pu.no, date: $('#puDate').value || today(),
+      remark: uiState.pu.remark || ''
     });
     closeModal(); toast('进货入库成功', 'ok'); route();
   };

@@ -1046,6 +1046,41 @@ async function run() {
   check('保存后进货单+1', i3.DB.all('purchases').length === beforeN + 1);
   check('进货单新设计全程无 JS 错误', i3.errors.length === 0, i3.errors.join(' | '));
 
+  section('I3b 新建进货单备注栏');
+  var i3b = boot({ hash: '#purchase' });
+  i3b.App.openPurchaseForm();
+  check('进货单弹窗有备注输入框 #puRemark', !!i3b.$('#puRemark'));
+  check('备注输入框是textarea类型', i3b.$('#puRemark') && i3b.$('#puRemark').tagName === 'TEXTAREA');
+  // 输入备注并保存进货单
+  i3b.$('#puKw').value = '海尔';
+  i3b.click(i3b.$('#puAddBtn'));
+  i3b.$('#puSup').value = i3b.DB.all('suppliers')[0].id;
+  i3b.$('#puRemark').value = '测试进货备注：物流送货上门';
+  i3b.fire(i3b.$('#puRemark'), 'input');
+  var beforeP = i3b.DB.all('purchases').length;
+  i3b.App.savePurchase();
+  check('保存后进货单+1', i3b.DB.all('purchases').length === beforeP + 1);
+  // 验证进货单保存了备注
+  var lastPurchase = i3b.DB.all('purchases')[i3b.DB.all('purchases').length - 1];
+  check('进货单保存备注信息', lastPurchase.remark === '测试进货备注：物流送货上门', lastPurchase.remark);
+  // 进货单详情显示备注
+  i3b.App.openPurchase(lastPurchase.id);
+  check('进货单详情显示备注内容', /测试进货备注/.test(i3b.$('#modalBody').textContent), i3b.$('#modalBody').textContent.slice(0, 200));
+  i3b.App.closeModal();
+  // 无备注的进货单详情不显示备注行
+  var i3b2 = boot({ hash: '#purchase' });
+  i3b2.App.openPurchaseForm();
+  i3b2.$('#puKw').value = '海尔';
+  i3b2.click(i3b2.$('#puAddBtn'));
+  i3b2.$('#puSup').value = i3b2.DB.all('suppliers')[0].id;
+  i3b2.App.savePurchase();
+  var purchaseNoRemark = i3b2.DB.all('purchases')[i3b2.DB.all('purchases').length - 1];
+  check('无备注的进货单remark为空', !purchaseNoRemark.remark);
+  i3b2.App.openPurchase(purchaseNoRemark.id);
+  check('无备注的进货单详情不显示备注标签', !/备注/.test(i3b2.$('#modalBody').textContent));
+  check('进货单备注功能全程无JS错误', i3b.errors.length + i3b2.errors.length === 0,
+    [i3b.errors, i3b2.errors].map(function (x) { return x.join('|'); }).join(' / '));
+
   section('I4 设置页 GitHub Pages 数据同步');
   var i4 = boot({ hash: '#settings' });
   check('设置页有 GitHub 同步入口', /同步到 GitHub|GitHub Pages|更新到 GitHub/.test(i4.$('#view').textContent));
