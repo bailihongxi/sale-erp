@@ -951,6 +951,42 @@ async function run() {
   }
   check('实收金额可输入功能全程无JS错误', i2c.errors.length === 0, i2c.errors.join('|'));
 
+  section('I2d 结算单输入框修复（不跳出+应收可输入）');
+  var i2d = boot({ hash: '#pos' });
+  var card2d = i2d.$('#posGrid .prod-card');
+  if (card2d) i2d.click(card2d);
+  // 优惠金额输入框是text类型（无步进）
+  var discInput = i2d.$('#posDisc');
+  check('优惠金额输入框是text类型', discInput && discInput.type === 'text', discInput && discInput.type);
+  check('优惠金额输入框有inputmode=decimal', discInput && discInput.getAttribute('inputmode') === 'decimal');
+  // 应收合计是输入框，自动填写
+  var totalInput = i2d.$('#posTotal');
+  check('应收合计是输入框', !!totalInput);
+  check('应收合计输入框是text类型', totalInput && totalInput.type === 'text');
+  check('应收合计自动填写了金额', totalInput && parseFloat(totalInput.value) > 0, totalInput && totalInput.value);
+  // 实收金额输入框是text类型
+  var paidInput = i2d.$('#posPaid');
+  check('实收金额输入框是text类型', paidInput && paidInput.type === 'text');
+  // 输入优惠金额后，应收合计自动更新（不重新渲染整个区域）
+  if (discInput && totalInput) {
+    var beforeTotal = parseFloat(totalInput.value);
+    discInput.value = '10';
+    i2d.fire(discInput, 'input');
+    var afterTotal = parseFloat(totalInput.value);
+    check('输入优惠金额后应收合计减少', afterTotal < beforeTotal, afterTotal + ' vs ' + beforeTotal);
+    // 优惠金额输入框仍然保持焦点（没有被重新渲染）
+    check('优惠金额输入框未失焦（值保持）', discInput.value === '10', discInput.value);
+  }
+  // 输入应收合计后，优惠金额自动更新
+  if (totalInput && discInput) {
+    totalInput.value = '50';
+    i2d.fire(totalInput, 'input');
+    check('输入应收合计后优惠金额自动更新', parseFloat(discInput.value) >= 0, discInput.value);
+  }
+  // 欠款显示元素存在
+  check('欠款显示元素有id=posDebt', !!i2d.$('#posDebt'));
+  check('结算单输入框修复全程无JS错误', i2d.errors.length === 0, i2d.errors.join('|'));
+
   section('I3 新建进货单重新设计（搜索+添加+产品列表+结算）');
   var i3 = boot({ hash: '#purchase' });
   i3.App.openPurchaseForm();

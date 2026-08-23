@@ -779,6 +779,23 @@
     if (tier === 'w') return DB.round2(p.priceWholesale);
     return DB.round2(cur);
   }
+  /** 只更新结算区域的合计和欠款，不重新渲染整个购物车（避免输入框失焦） */
+  function updatePosSettle() {
+    var ids = Object.keys(pos.items);
+    var subtotal = ids.reduce(function (a, pid) { var it = pos.items[pid]; return a + it.qty * it.price; }, 0);
+    var discount = pos.discount || 0;
+    var total = Math.max(0, subtotal - discount);
+    var paid = pos.paid || 0;
+    var debt = Math.max(0, total - paid);
+    // 更新应收合计输入框（如果不是当前焦点元素）
+    var totalInput = $('#posTotal');
+    if (totalInput && document.activeElement !== totalInput) {
+      totalInput.value = total.toFixed(2);
+    }
+    // 更新欠款显示
+    var debtEl = $('#posDebt');
+    if (debtEl) debtEl.textContent = money(debt);
+  }
   function renderPosCart() {
     var c = $('#posCart'); if (!c) return;
     var ids = Object.keys(pos.items);
@@ -823,12 +840,12 @@
       '<div style="border-top:1px solid var(--c-border);margin-top:8px;padding-top:8px">' +
       '<div class="settle-line"><span>商品件数</span><span class="v">' + ids.reduce(function (a, pid) { return a + pos.items[pid].qty; }, 0) + ' 件</span></div>' +
       '<div class="settle-line"><span>小计</span><span class="v">' + money(subtotal) + '</span></div>' +
-      '<div class="field" style="margin:8px 0"><label>优惠金额</label><input id="posDisc" type="number" value="' + discount + '"/></div>' +
-      '<div class="settle-line"><span>应收合计</span><span class="v">' + money(total) + '</span></div>' +
+      '<div class="field" style="margin:8px 0"><label>优惠金额</label><input id="posDisc" type="text" inputmode="decimal" placeholder="请输入优惠金额" value="' + discount + '"/></div>' +
+      '<div class="field" style="margin:8px 0"><label>应收合计</label><input id="posTotal" type="text" inputmode="decimal" placeholder="应收合计" value="' + total + '"/></div>' +
       '<div class="field" style="margin:8px 0"><label>实收金额</label><input id="posPaid" type="text" inputmode="decimal" placeholder="请输入实收金额" value="' + paid + '"/></div>' +
       '<div class="field"><label>收款方式</label><select id="posMethod"><option ' + (pos.method === '现金' ? 'selected' : '') + '>现金</option><option ' + (pos.method === '微信' ? 'selected' : '') + '>微信</option><option ' + (pos.method === '支付宝' ? 'selected' : '') + '>支付宝</option><option ' + (pos.method === '银行' ? 'selected' : '') + '>银行</option><option ' + (pos.method === '欠款' ? 'selected' : '') + '>欠款</option></select></div>' +
       '<div class="field" style="margin:8px 0"><label>备注</label><textarea id="posRemark" rows="2" placeholder="可填写销售备注信息，如送货地址、特殊要求等" style="width:100%;resize:vertical">' + esc(pos.remark || '') + '</textarea></div>' +
-      '<div class="settle-line"><span>欠款</span><span class="v" style="color:var(--c-danger)">' + money(debt) + '</span></div>' +
+      '<div class="settle-line"><span>欠款</span><span class="v" id="posDebt" style="color:var(--c-danger)">' + money(debt) + '</span></div>' +
       (over.length ? '<div class="cart-warn" style="display:block;margin-top:8px;padding:6px 8px">库存不足：' + esc(over.join('、')) + '，请调整数量或先入库</div>' : '') +
       '<button class="btn btn--primary btn--block mt12" onclick="App.settlePos()">💰 确认结算</button>' +
       '</div></div>';
@@ -841,13 +858,23 @@
       }
       pos.customerId = e.target.value || null;
     });
-    $('#posDisc').addEventListener('input', function (e) { pos.discount = parseFloat(e.target.value) || 0; renderPosCart(); });
-    $('#posPaid').addEventListener('input', function (e) { pos.paid = parseFloat(e.target.value) || 0; renderPosCart(); });
+    $('#posDisc').addEventListener('input', function (e) {
+      pos.discount = parseFloat(e.target.value) || 0;
+      updatePosSettle();
+    });
+    $('#posTotal').addEventListener('input', function (e) {
+      var total = parseFloat(e.target.value) || 0;
+      var subtotal = Object.keys(pos.items).reduce(function (a, pid) { var it = pos.items[pid]; return a + it.qty * it.price; }, 0);
+      pos.discount = Math.max(0, subtotal - total);
+      $('#posDisc').value = pos.discount.toFixed(2);
+      updatePosSettle();
+    });
+    $('#posPaid').addEventListener('input', function (e) { pos.paid = parseFloat(e.target.value) || 0; updatePosSettle(); });
     $('#posPaid').addEventListener('blur', function (e) {
       var val = parseFloat(e.target.value) || 0;
       pos.paid = val;
-      e.target.value = val.toFixed(2); // 输入完成后格式化保留2位小数
-      renderPosCart();
+      e.target.value = val.toFixed(2);
+      updatePosSettle();
     });
     $('#posMethod').addEventListener('change', function (e) { pos.method = e.target.value; });
     $('#posRemark').addEventListener('input', function (e) { pos.remark = e.target.value; });
