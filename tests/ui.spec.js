@@ -34,8 +34,9 @@ async function run() {
   section('D2 导航结构');
   check('侧边栏导航项 = ' + NAV_COUNT, t.$$('#nav .nav__item').length === NAV_COUNT, t.$$('#nav .nav__item').length);
   check('侧边栏含 2 个分组标题', t.$$('#nav .nav__group').length === 2);
-  check('手机底部导航 4 项', t.$$('#bottomNav .nav__item').length === 4, t.$$('#bottomNav .nav__item').length);
+  check('手机底部导航 3 项', t.$$('#bottomNav .nav__item').length === 3, t.$$('#bottomNav .nav__item').length);
   check('手机底部含"我的"入口', t.$$('#bottomNav [data-id="more"]').length === 1);
+  check('手机底部不含开单入口（移至我的侧边栏）', t.$$('#bottomNav [data-id="pos"]').length === 0);
   check('Sheet 内含全部模块导航', t.$$('#sheetNav .nav__item').length === NAV_COUNT, t.$$('#sheetNav .nav__item').length);
 
   section('D3 十个模块视图均可渲染');
@@ -720,8 +721,10 @@ async function run() {
 
   section('M2 手机底部导航与"我的"菜单');
   var m = boot();
-  check('底部导航渲染 4 项', m.$$('#bottomNav .nav__item').length === 4, m.$$('#bottomNav .nav__item').length);
-  check('Sheet 菜单含全部 ' + NAV_COUNT + ' 个模块', m.$$('#sheetNav .nav__item').length === NAV_COUNT, m.$$('#sheetNav .nav__item').length);
+  check('底部导航渲染 3 项', m.$$('#bottomNav .nav__item').length === 3, m.$$('#bottomNav .nav__item').length);
+  check('底部导航不含开单（移至我的侧边栏）', m.$$('#bottomNav [data-id="pos"]').length === 0);
+  check('Sheet 菜单含全部 ' + NAV_COUNT + ' 个模块（含开单）', m.$$('#sheetNav .nav__item').length === NAV_COUNT, m.$$('#sheetNav .nav__item').length);
+  check('Sheet 菜单含开单模块', m.$$('#sheetNav [data-id="pos"]').length === 1);
   var moreBtn = m.$('#bottomNav [data-id="more"]');
   m.click(moreBtn);
   check('点"我的"弹出底部菜单 Sheet', m.$('#sheetMask').classList.contains('show'));
@@ -1669,20 +1672,21 @@ async function run() {
   check('批量删除后选中状态清空', Object.keys(i14.window.App ? {} : {}).length === 0 || true);
   check('批量操作全程无 JS 错误', i14.errors.length === 0, i14.errors.join(' | '));
 
-  section('I15 手机端底部导航优化（剔除库存+自适应）');
+  section('I15 手机端底部导航优化（3项：工作台/商品/我的）');
   var i15 = boot({ hash: '#products', width: 390 });
   var bottomItems = i15.$$('#bottomNav .nav__item');
   var bottomIds = Array.from(bottomItems).map(function (a) { return a.getAttribute('data-id'); });
-  check('手机端底部导航共4项', bottomIds.length === 4, bottomIds.join(','));
+  check('手机端底部导航共3项', bottomIds.length === 3, bottomIds.join(','));
   check('底部导航不含库存页', bottomIds.indexOf('inventory') < 0, bottomIds.join(','));
+  check('底部导航不含开单（移至我的侧边栏）', bottomIds.indexOf('pos') < 0, bottomIds.join(','));
   check('底部导航含工作台', bottomIds.indexOf('dashboard') >= 0);
   check('底部导航含商品', bottomIds.indexOf('products') >= 0);
-  check('底部导航含开单（pos）', bottomIds.indexOf('pos') >= 0, bottomIds.join(','));
   check('底部导航含我的（more）', bottomIds.indexOf('more') >= 0);
-  // 库存管理仍可在「我的」菜单中访问
+  // 库存管理和开单仍可在「我的」菜单中访问
   var sheetItems = i15.$$('#sheetNav .nav__item');
   var sheetIds = Array.from(sheetItems).map(function (a) { return a.getAttribute('data-id'); });
   check('「我的」菜单仍含库存管理', sheetIds.indexOf('inventory') >= 0, sheetIds.join(','));
+  check('「我的」菜单含开单（pos）', sheetIds.indexOf('pos') >= 0, sheetIds.join(','));
   check('「我的」菜单含系统设置', sheetIds.indexOf('settings') >= 0);
   check('「我的」菜单含数据管理', sheetIds.indexOf('data') >= 0);
   check('手机端导航全程无 JS 错误', i15.errors.length === 0, i15.errors.join(' | '));
